@@ -1,3 +1,79 @@
+var Achievement = function(obj) {
+	this.collect(obj);
+};
+Achievement.prototype.collect = function(obj) {
+	for (p in obj) {
+		if (obj.hasOwnProperty(p)) {
+			this[p] = obj[p];
+		}
+	}
+};
+Achievement.prototype.getElement = function() {
+	achElem = $('<div/>', {text: this.getDescription()});
+	achElem.prepend($('<h1/>', {text: this.getName()}));
+	if (this.getAchievementState() == "UNLOCKED") {
+		unlocked++;
+		achElem.prepend($('<span/>', {class: "unlocked"}));
+	}
+	if (this.achievementType == "INCREMENTAL" && this.getAchievementState() == "REVEALED") {
+		percent = d(this.currentSteps * 360, this.totalSteps);
+
+		progress = $('<span/>', {class: "progress"})
+			.append(
+			$('<span/>',
+				{
+					class: "text",
+					text: d(this.currentSteps * 100, this.totalSteps) + '%'
+				}
+			)
+		);
+
+		circle = $('<span style="-webkit-transform: rotate(' + percent + 'deg)"></span>')
+		.addClass("circle");
+
+		if (percent > 180) {
+			progress
+			.append($('<span/>', {class: "circle"}))
+			.append(circle);
+		} else {
+			progress
+			.append($('<span/>', {class: "progress_half"})
+				.append(circle)
+			);
+		}
+
+		achElem.prepend(progress);
+	} else {
+		achElem.prepend($('<img/>', {src: (this.getAchievementState() == "UNLOCKED" ? this.unlockedIconUrl : this.getRevealedIconUrl())}));
+	}
+	return achElem;
+};
+Achievement.prototype.getRevealedIconUrl = function() {
+	return this.achievementState == "HIDDEN" ? "image/lock.png" : this.revealedIconUrl;
+};
+Achievement.prototype.getName = function() {
+	return this.achievementState == "HIDDEN" ? "Secret" : this.name;
+};
+Achievement.prototype.getDescription = function() {
+	return this.achievementState == "HIDDEN" ? "Keep playing to learn more" : this.description;
+};
+Achievement.prototype.getAchievementState = function() {
+	return this.achievementState == "HIDDEN" ? "REVEALED" : this.achievementState;
+};
+Achievement.achievements = {};
+Achievement.update = function(obj) {
+	if (Achievement.achievements[obj.id]) {
+		Achievement.achievements[obj.id].collect(obj);
+	} else {
+		Achievement.achievements[obj.id] = new Achievement(obj);
+	}
+};
+Achievement.count = function() {
+	return Object.keys(Achievement.achievements).length;
+};
+
+// -------------------------------------------------------------------- //
+
 function do_req(url, func, obj, fail) {
 	$.getJSON(url, function(data) {
 		if (func !== undefined) {
@@ -50,74 +126,28 @@ function signinCallback(authResult) {
 	}
 }
 
-var achievements = {};
-var secretAch = {achievementState: "REVEALED", revealedIconUrl: "image/lock.png", name: "Secret", description: "Keep playing to learn more"};
-
 function achResult(ach) {
-	show = (Object.keys(achievements).length > 0);
+	show = (Achievement.count() > 0);
 	for (x in ach.items) {
-		achievements[ach.items[x].id] = collect(ach.items[x], achievements[ach.items[x].id]);
+		Achievement.update(ach.items[x]);
 	}
+
 	if (show) {
 		$('#ach_list').empty();
-		html = "";
 		unlocked = 0;
-		for (x in achievements) {
-			if (achievements[x].achievementState != "HIDDEN") {
-				cAch = achievements[x];
-			} else {
-				cAch = secretAch;
-			}
-			achElem = $('<div>' + cAch.description + '</div>');
-			achElem.prepend($('<h1>' + cAch.name + '</h1>'));
-			if (cAch.achievementState == "UNLOCKED") {
-				unlocked++;
-				achElem.prepend($('<span class="unlocked"></span>'));
-			}
-			if (cAch.achievementType == "INCREMENTAL" && cAch.achievementState == "REVEALED") {
-				percent = d(cAch.currentSteps * 360, cAch.totalSteps);
-				html += '<span class="progress"><span class="text">' + d(cAch.currentSteps * 100, cAch.totalSteps) + '%</span>';
-				if (percent > 180) {
-					html += '<span class="circle"></span>';
-					percent -= 360;
-				} else {
-					html += '<span class="progress_half">';
-				}
-				html += '<span class="circle" style="-webkit-transform: rotate(' + percent + 'deg)"></span></span>';
-				if (percent >= 0) {
-					html += "</span>";
-				}
-			} else {
-				achElem.prepend($('<img src="' + (cAch.achievementState == "UNLOCKED" ? cAch.unlockedIconUrl : cAch.revealedIconUrl) + '" />'));
-			}
-			$('#ach_list').append(achElem);
+		for (x in Achievement.achievements) {
+			$('#ach_list').append(Achievement.achievements[x].getElement());
 		}
 		
 		$('#ach_list').prepend(
-			$('<h1>' + unlocked + '/' + Object.keys(achievements).length + ' unlocked</h1>')
-			.append($('<span></span>')
-				.append($('<b></b>')
-					.text(d(unlocked * 100, Object.keys(achievements).length) + '%')
-				).append($('<span></span>')
-					.width(d(unlocked * 90, Object.keys(achievements).length))
-				)
+			$('<h1/>', {text: unlocked + '/' + Achievement.count() + ' unlocked'})
+			.append($('<span/>')
+				.append($('<b/>', {text: d(unlocked * 100, Achievement.count()) + '%'}))
+				.append($('<span/>', {width: d(unlocked * 90, Achievement.count())}))
 			)
 		);
 		$('#achievements').show();
 	}
-}
-
-function collect() {
-	var ret = {};
-	var len = arguments.length;
-	for (var i=0; i<len; i++) {
-		for (p in arguments[i]) {
-			if (arguments[i].hasOwnProperty(p)) {
-				ret[p] = arguments[i][p];
-			}
-		}
-	}
-	return ret;
 }
 
 function meResult(usr) {
