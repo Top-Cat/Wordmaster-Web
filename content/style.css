@@ -1,18 +1,18 @@
 @font-face {
 	font-family: Roboto;
-	src: url('Roboto-Regular.ttf');
+	src: url('../font/Roboto-Regular.ttf');
 }
 @font-face {
 	font-family: RobotoL;
-	src: url('Roboto-Light.ttf');
+	src: url('../font/Roboto-Light.ttf');
 }
 @font-face {
 	font-family: RobotoI;
-	src: url('Roboto-ThinItalic.ttf');
+	src: url('../font/Roboto-ThinItalic.ttf');
 }
 @font-face {
 	font-family: Russo;
-	src: url('Russo_One.ttf');
+	src: url('../font/Russo_One.ttf');
 }
 
 html, body {
