@@ -30,7 +30,7 @@ body {
 }
 
 #header {
-	background: #CCC url('logo_42.png') 6px center no-repeat;
+	background: #CCC url('../image/logo_42.png') 6px center no-repeat;
 	color: #444;
 	padding: 1px 0 1px 60px;
 	font-family: Roboto;
@@ -45,10 +45,10 @@ body {
 	margin-right: 3px;
 }
 #refresh {
-	background: url('refresh.png');
+	background: url('../image/refresh.png');
 }
 #menu {
-	background: url('menu.png');
+	background: url('../image/menu.png');
 }
 #menu ul {
 	list-style-type: none;
@@ -87,7 +87,7 @@ body {
 	to { -webkit-transform: rotate(0deg); }
 }
 #spinner {
-	background: url('spinner_outer.png');
+	background: url('../image/spinner_outer.png');
 	-webkit-animation-name: spin;
 	-webkit-animation-duration: 4s;
 	-webkit-animation-iteration-count: infinite;
@@ -99,7 +99,7 @@ body {
 }
 #spinner div {
 	margin-right: 0;
-	background: url('spinner_inner.png');
+	background: url('../image/spinner_inner.png');
 	-webkit-animation-name: spin_inner;
 	-webkit-animation-duration: 4s;
 	-webkit-animation-iteration-count: infinite;
@@ -205,7 +205,7 @@ body {
 	float: right;
 	clear: both;
 	margin-top: 6px;
-	background: url('note.png');
+	background: url('../image/note.png');
 	width: 24px;
 	height: 24px;
 }
@@ -328,13 +328,13 @@ body {
 	height: 24px;
 }
 .pegs .gold {
-	background: url('note.png');
+	background: url('../image/note.png');
 }
 .pegs .silver {
-	background: url('silver.png');
+	background: url('../image/silver.png');
 }
 .pegs .white {
-	background: url('white.png');
+	background: url('../image/white.png');
 }
 
 #alpha {
@@ -424,7 +424,7 @@ body {
 	top: 0px;
 }
 #ach_header span {
-	background: url('logo_54.png') center center no-repeat;
+	background: url('../image/logo_54.png') center center no-repeat;
 	display: inline-block;
 	height: 54px;
 	width: 72px;
@@ -475,7 +475,7 @@ body {
 	height: 280px;
 	margin: 5px;
 	padding: 10px;
-	background: #FFF url('achbg.png') no-repeat;
+	background: #FFF url('../image/achbg.png') no-repeat;
 	box-shadow: 0 3px 3px -1px #AAA;
 	vertical-align: top;
 }
@@ -495,7 +495,7 @@ body {
 	float: right;
 	width: 24px;
 	height: 36px;
-	background: url('unlocked.png') no-repeat;
+	background: url('../image/unlocked.png') no-repeat;
 	margin: 74px -4px 0 0;
 }
 .progress {

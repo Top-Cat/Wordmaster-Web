@@ -51,7 +51,7 @@ function signinCallback(authResult) {
 }
 
 var achievements = {};
-var secretAch = {achievementState: "REVEALED", revealedIconUrl: "content/lock.png", name: "Secret", description: "Keep playing to learn more"};
+var secretAch = {achievementState: "REVEALED", revealedIconUrl: "image/lock.png", name: "Secret", description: "Keep playing to learn more"};
 
 function achResult(ach) {
 	show = (Object.keys(achievements).length > 0);
@@ -355,7 +355,7 @@ function updateTurnObj(id) {
 			pegs += "</div>";
 			if (isPlayer) {
 				if (turns[currentGame][id]['correct'] == 4) {
-					out += "<img src='content/crown_flipped.png' style='margin-right: 10px; vertical-align: text-top' />";
+					out += "<img src='image/crown_flipped.png' style='margin-right: 10px; vertical-align: text-top' />";
 					turnObjs[currentGame][id].className = 'turn_win';
 				} else {
 					turnObjs[currentGame][id].className = 'turn_big';
@@ -368,7 +368,7 @@ function updateTurnObj(id) {
 				out += "<span>" + users[games[currentGame]['oppid']]['name']['givenName'] + " guessed " + turns[currentGame][id]['guess'] + "</span>";
 				if (turns[currentGame][id]['correct'] == 4) {
 					turnObjs[currentGame][id].className = 'turn_lose';
-					out += "<img src='content/crown.png' />";
+					out += "<img src='image/crown.png' />";
 					out += "<br /><span>" + users[games[currentGame]['oppid']]['name']['givenName'] + "'s word was " + turns[currentGame][id]['oppword'] + "</span>";
 				} else {
 					turnObjs[currentGame][id].className = 'turn_small';
