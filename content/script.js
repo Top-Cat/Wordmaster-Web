@@ -16,22 +16,20 @@ Achievement.prototype.getElement = function() {
 		achElem.prepend($('<span/>', {class: "unlocked"}));
 	}
 	if (this.achievementType == "INCREMENTAL" && this.getAchievementState() == "REVEALED") {
-		percent = d(this.currentSteps * 360, this.totalSteps);
-
 		progress = $('<span/>', {class: "progress"})
 			.append(
 			$('<span/>',
 				{
 					class: "text",
-					text: d(this.currentSteps * 100, this.totalSteps) + '%'
+					text: this.getProgress(100) + '%'
 				}
 			)
 		);
 
-		circle = $('<span style="-webkit-transform: rotate(' + percent + 'deg)"></span>')
+		circle = $('<span style="-webkit-transform: rotate(' + this.getProgress(360) + 'deg)"></span>')
 		.addClass("circle");
 
-		if (percent > 180) {
+		if (this.getProgress() > 0.5) {
 			progress
 			.append($('<span/>', {class: "circle"}))
 			.append(circle);
@@ -47,6 +45,10 @@ Achievement.prototype.getElement = function() {
 		achElem.prepend($('<img/>', {src: (this.getAchievementState() == "UNLOCKED" ? this.unlockedIconUrl : this.getRevealedIconUrl())}));
 	}
 	return achElem;
+};
+Achievement.prototype.getProgress = function(a) {
+	a = typeof a !== 'undefined' ? a : 1;
+	return d((this.currentSteps ? this.currentSteps : 0) * a, this.totalSteps);
 };
 Achievement.prototype.getRevealedIconUrl = function() {
 	return this.achievementState == "HIDDEN" ? "image/lock.png" : this.revealedIconUrl;
@@ -74,6 +76,234 @@ Achievement.count = function() {
 
 // -------------------------------------------------------------------- //
 
+var Match = function(obj) {
+	this.turns = [];
+	this.turnDiv = $("<div/>", {id: "turns"});
+	this.guessDiv = [$("<div/>"), $("<div/>"), $("<div/>"), $("<div/>")];
+
+	this.gameWindow = $("<div/>", {class: "gameWindow"})
+	.append($("<div/>", {id: "scores"})
+		.append($("<div/>", {id: "me", text: "0"}))
+		.append($("<div/>", {id: "opp", text: "0"}))
+	)
+	.append(this.turnDiv)
+	.append(alpha)
+	.append($("<div/>", {id: "footer"})
+		.append($("<div/>", {id: "turn_count", text: "Turn"})
+			.append($("<span/>", {text: "2"}))
+		)
+		.append($("<div/>", {id: "guess"})
+			.append(this.guessDiv)
+		)
+	);
+
+	this.timeDiv = $("<div/>", {class: "time"});
+	this.noteDiv = $("<div/>", {class: "note"});
+
+	var matchObj = this;
+
+	this.listItem = $("<div/>", {class: "game", id: obj.gameid, text: "vs"})
+	.click(function() { matchObj.show(); })
+	.append(this.timeDiv);
+
+	$('#gamelist > :first-child').append(this.getListItem());
+
+	this.update(obj);
+};
+Match.prototype.getListItem = function() {
+	return this.listItem;
+};
+Match.prototype.update = function(obj) {
+	this.obj = obj;
+
+	this.updateDOM();
+};
+Match.prototype.updateDOM = function() {
+	if (this.obj.oppid in users && !this.hasOwnProperty('oppImg')) {
+		usr = users[this.obj.oppid];
+		this.oppImg = $("<img/>", {src: usr['image']['url']});
+		setTextContents(this.getListItem(), "vs " + usr['displayName']);
+		this.getListItem().prepend(this.oppImg);
+	} else if (!(this.obj.oppid in users)) {
+		gapi.client.request({path: "/plus/v1/people/" + this.obj.oppid, callback: userResult});
+	}
+
+	this.timeDiv.text(timeSince(this.obj.updated));
+
+	if (this.obj.turn || this.obj.neesword) {
+		this.getListItem().append(this.noteDiv);
+	}
+};
+Match.prototype.show = function() {
+	if (Match.transitioning) {
+		return;
+	}
+	Match.transitioning = true;
+
+	if (Match.current) {
+		Match.current.getListItem().removeClass("selectedgame");
+	}
+	Match.old = Match.current;
+	Match.current = this;
+	this.getListItem().addClass("selectedgame");
+
+	for (i = 0; i < 26; i++) {
+		this.gameWindow.find('#alpha_' + i)
+		.attr('class', ((this.obj.alpha >> i) & 1) == 1 ? 'hidden' : '');
+	}
+
+	$('#rightpane').append(this.gameWindow);
+	setTimeout(function() {
+		setTimeout(function() {
+			Match.transitioning = false;
+		}, 600);
+		if (Match.old) {
+			Match.old.gameWindow.css({top: "100%"});
+			setTimeout(function() {
+				Match.old.gameWindow.remove();
+			}, 600);
+		}
+		Match.current.gameWindow.css({top: "0%"});
+	}, 10);
+
+	if ('me' in users) {
+		this.gameWindow.find('#me').css('background-image', "url('" + users['me']['image']['url'] + "')");
+	}
+	if (this.obj.oppid in users) {
+		this.gameWindow.find('#opp').css('background-image', "url('" + users[this.obj.oppid]['image']['url'] + "')");
+	}
+
+	for (x in this.turns) {
+		this.turns[x] = this.turns[x].clone(true);
+		currentScreen.find('#turns').append(this.turns[x]);
+		this.turns[x].updateDOM();
+	}
+
+	do_req("getTurns/" + playerid + "/" + this.obj.gameid, turnsResult, this);
+};
+Match.prototype.updateAlpha = function(off) {
+	this.obj.alpha ^= (1 << off);
+
+	if ((this.alphaStatus & 1) == 0) {
+		this.alphaStatus |= 1;
+		do_req("updateAlpha/" + playerid + "/" + this.obj.gameid + "/" + this.obj.alpha, alphaDone, this, alphaFail);
+	} else {
+		this.alphaStatus |= 2;
+	}
+}
+Match.matches = {};
+Match.transitioning = false;
+Match.update = function(obj) {
+	if (Match.matches[obj.gameid]) {
+		Match.matches[obj.gameid].update(obj);
+	} else {
+		Match.matches[obj.gameid] = new Match(obj);
+	}
+};
+Match.updateAll = function() {
+	for (x in Match.matches) {
+		Match.matches[x].updateDOM();
+	}
+};
+Match.prototype.updateTurn = function(obj) {
+	if (!(obj.turnid in this.turns)) {
+		this.turns[obj.turnid] = new Turn(this, obj.turnid);
+	}
+	this.turns[obj.turnid].update(obj);
+};
+Match.sort = function() {
+	$('#gamelist').sort(function(ao, bo) {
+		a = Match.matches[ao.id];
+		b = Match.matches[bo.id];
+
+		var ev1 = (a['turn'] ? 1 : 0) | (a['needword'] ? 2 : 0);
+		var ev2 = (b['turn'] ? 1 : 0) | (b['needword'] ? 2 : 0);
+		var r = ev2 - ev1;
+		if (r == 0) {
+			return b['updated'] - a['updated'];
+		}
+		return r;
+	});
+};
+
+// -------------------------------------------------------------------- //
+
+var Turn = function(match, tid) {
+	this.match = match;
+	this.timeDiv = $("<div/>", {class: "time"});
+	this.pegsDiv = $("<div/>", {class: "pegs"});
+	this.textDiv = $("<span/>");
+
+	this.turnDiv = $("<div/>", {id: tid})
+		.append(this.pegsDiv)
+		.append(this.timeDiv)
+		.append(this.textDiv);
+};
+Turn.prototype.isPlayer = function() {
+	return this.player;
+};
+Turn.prototype.update = function(obj) {
+	this.obj = obj;
+
+	this.player = uid == this.obj.playerid;
+
+	if (this.obj.turnnum > 0 || this.isPlayer()) {
+		Match.current.turnDiv.append(this.turnDiv);
+	}
+
+	this.updateDOM();
+}
+Turn.prototype.updateDOM = function() {
+	turn_count = Match.current.gameWindow.find('#turn_count');
+	if (this.obj.turnnum > 0) {
+		turn_count.show();
+	} else {
+		turn_count.hide();
+	}
+	turn_count.find("span:first-child").html(this.obj.turnnum);
+
+	if (this.obj.turnnum == 0) {
+		this.turnDiv.addClass('turn_new');
+		this.textDiv.text("Your word is " + this.obj.guess);
+	} else {
+		this.pegsDiv.empty();
+
+		t = 0;
+		c = this.obj.correct;
+		while (c - t > 0) {
+			t++;
+			this.pegsDiv.append($("<div/>", {class: "gold"}));
+		}
+		s = this.obj.displaced;
+		while ((s + c) - t > 0) {
+			t++;
+			this.pegsDiv.append($("<div/>", {class: "silver"}));
+		}
+		while (t < 4) {
+			t++;
+			this.pegsDiv.append($("<div/>", {class: "white"}));
+		}
+
+		if (this.isPlayer()) {
+			this.turnDiv.addClass("turn_player");
+		}
+		this.textDiv.html(
+			(this.isPlayer() ? this.obj.guess : users[this.match.obj.oppid]['name']['givenName'] + " guessed " +
+				this.obj.guess +
+				(this.obj.correct == 4 ? "<br />" + users[this.match.obj.oppid]['name']['givenName'] + "'s word was " + this.obj.oppword : "")
+			)
+		);
+
+		if (this.obj.correct == 4) {
+			this.turnDiv.addClass("turn_win");
+		}
+
+		this.timeDiv.text(timeSince(this.obj.when));
+	}
+};
+
+// -------------------------------------------------------------------- //
+
 function do_req(url, func, obj, fail) {
 	$.getJSON(url, function(data) {
 		if (func !== undefined) {
@@ -84,20 +314,22 @@ function do_req(url, func, obj, fail) {
 	});
 }
 
+function setTextContents($elem, text) {
+	$elem.contents().filter(function() {
+		if (this.nodeType == Node.TEXT_NODE) {
+			this.nodeValue = text;
+		}
+	});
+}
+
 var token = "";
 var playerid = "";
 var uid = "";
-var games = {};
-var gameObjs = {};
 var turns = {};
 var turnObjs = {};
-var currentGame = "";
-var currentScreen = null;
-var newScreen = null;
 var users = {};
 
 function signinCallback(authResult) {
-	console.log(authResult);
 	if (authResult['access_token']) {
 		token = authResult['access_token'];
 		do_req("identify/" + token, idResult);
@@ -116,7 +348,12 @@ function signinCallback(authResult) {
 			success: function(data) {
 				$('#overlay').show();
 				playerid = token = "";
-				setTimeout(showScreen, 10, currentScreen);
+
+				Match.current.gameWindow.css({top: "100%"});
+				setTimeout(function() {
+					Match.current.gameWindow.remove();
+				}, 600);
+
 				$('#gamelist > :first-child').empty();
 			}});
 		});
@@ -158,17 +395,13 @@ function meResult(usr) {
 
 function userResult(usr) {
 	users[usr['id']] = usr;
-	for (x in games) {
-		if (games[x]['oppid'] == usr['id']) {
-			updateMatchObj(x);
-		}
-	}
+	Match.updateAll();
 }
 
 function idResult(res, err) {
 	if (err == 0) {
 		playerid = res['key'];
-		document.getElementById('overlay').style.display = 'none';
+		$('#overlay').hide();
 		loadGames();
 	} else {
 		alert('error ' + err);
@@ -176,238 +409,43 @@ function idResult(res, err) {
 }
 
 function loadGames() {
-	if (document.getElementById('refresh') != null) {
-		document.getElementById('refresh').id = 'spinner';
+	if (!$('#refresh').hasClass('spinner')) {
+		$('#refresh').addClass('spinner');
 		do_req("getMatches/" + playerid, matchResult);
 	}
 }
 
 function matchResult(res, err) {
-	document.getElementById('spinner').id = 'refresh';
+	$('#refresh').removeClass('spinner');
 	if (err == 0) {
 		for (x in res) {
-			games[res[x]['gameid']] = res[x];
-			if (!(res[x]['gameid'] in gameObjs)) {
-				gapi.client.request({path: "/plus/v1/people/" + res[x]['oppid'], callback: userResult});
-
-				var obj = document.createElement('div');
-				obj.className = 'game';
-				obj.id = res[x]['gameid'];
-				obj.onclick = function() { showMatch(this.id); };
-				gameObjs[res[x]['gameid']] = obj;
-				document.getElementById('gamelist').firstChild.appendChild(obj);
-			}
-			updateMatchObj(res[x]['gameid']);
+			Match.update(res[x]);
 		}
-		sortMatches();
+		Match.sort();
 	} else {
 		alert('error ' + err);
 	}
-	setTimeout(function() { if (currentGame.length == 0) { for (elem in gameObjs) { showMatch(gameObjs[elem].id); return; } } }, 1000);
+	setTimeout(function() { if (Match.current === undefined) { $('#gamelist .game').first().click(); } }, 1000);
 }
 
-function sortMatches() {
-	var sortableGames = [];
-	for (var key in games) sortableGames.push(games[key]);
-	sortableGames.sort(function(a, b) {
-		var ev1 = (a['turn'] ? 1 : 0) | (a['needword'] ? 2 : 0);
-		var ev2 = (b['turn'] ? 1 : 0) | (b['needword'] ? 2 : 0);
-		var r = ev2 - ev1;
-		if (r == 0) {
-			return b['updated'] - a['updated'];
-		}
-		return r;
-	});
-	for (x in sortableGames) {
-		document.getElementById('gamelist').firstChild.appendChild(gameObjs[sortableGames[x]['gameid']]);
-	}
+function alphaFail(r, err, obj) {
+	obj.alphaStatus |= 2;
+	alphaDone(r, err, obj);
 }
 
-function updateMatchObj(id) {
-	out = "";
-	if (games[id]['oppid'] in users) {
-		usr = users[games[id]['oppid']];
-		out += "<img src='" + usr['image']['url'] + "' />vs " + usr['displayName'];
-	}
-	out += "<div class='time'>" + timeSince(games[id]['updated']) + "</div>";
-	if (games[id]['turn'] || games[id]['needword']) {
-		out += "<div class='note'></div>";
-	}
-	gameObjs[id].innerHTML = out;
-}
-
-function showMatch(id) {
-	if (transitioning) {
-		return;
-	}
-
-	if (currentGame.length > 0) {
-		gameObjs[currentGame].className = "game";
-	}
-	currentGame = id;
-	gameObjs[currentGame].className = "game selectedgame";
-
-	newScreen = document.createElement('div');
-	newScreen.className = 'gameWindow';
-	newScreen.innerHTML = '<div id="scores"><div id="me">0</div><div id="opp">0</div></div><div id="turns"></div><div id="alpha">' + alpha + '</div><div id="footer"><div id="turn_count">Turn<span>2</span></div><div id="guess"><div></div><div></div><div></div><div></div></div></div>';
-	for (i = 0; i < 26; i++) {
-		alpha_obj = newScreen.querySelector('#alpha_' + i);
-		alpha_obj.onclick = function() {
-			updateAlpha(this);
-		};
-		alpha_obj.className = ((games[currentGame].alpha >> i) & 1) == 1 ? 'hidden' : '';
-	}
-
-	document.getElementById('rightpane').appendChild(newScreen);
-	setTimeout(showScreen, 10, currentScreen, newScreen);
-	fin = "";
-	currentScreen = newScreen;
-	newScreen = null;
-	transitioning = true;
-
-	if ('me' in users) {
-		currentScreen.querySelector('#me').style.backgroundImage = "url('" + users['me']['image']['url'] + "')";
-	}
-	if (games[currentGame]['oppid'] in users) {
-		currentScreen.querySelector('#opp').style.backgroundImage = "url('" + users[games[currentGame]['oppid']]['image']['url'] + "')";
-	}
-
-	for (x in turnObjs[currentGame]) {
-		turnObjs[currentGame][x] = turnObjs[currentGame][x].cloneNode(true);
-		currentScreen.querySelector('#turns').appendChild(turnObjs[currentGame][x]);
-		updateTurnObj(x);
-	}
-
-	do_req("getTurns/" + playerid + "/" + id, turnsResult, currentGame);
-}
-
-function updateAlpha(obj) {
-	id = obj.id.substr(6);
-	games[currentGame].alpha ^= (1 << id);
-	obj.className = ((games[currentGame].alpha >> id) & 1) == 1 ? 'hidden' : '';
-	if ((games[currentGame].alphaStatus & 1) == 0) {
-		games[currentGame].alphaStatus |= 1;
-		do_req("updateAlpha/" + playerid + "/" + currentGame + "/" + games[currentGame].alpha, alphaDone, currentGame, alphaFail);
+function alphaDone(r, err, obj) {
+	if ((obj.alphaStatus & 2) == 2) {
+		obj.alphaStatus &= 1;
+		do_req("updateAlpha/" + playerid + "/" + obj.obj.gameid + "/" + obj.obj.alpha, alphaDone, obj, alphaFail);
 	} else {
-		games[currentGame].alphaStatus |= 2;
+		obj.alphaStatus &= 2;
 	}
 }
 
-function alphaFail(obj, err, id) {
-	alphaStatus |= 2;
-	alphaDone();
-}
-
-function alphaDone(obj, err, id) {
-	if ((games[id].alphaStatus & 2) == 2) {
-		games[id].alphaStatus &= 1;
-		do_req("updateAlpha/" + playerid + "/" + currentGame + "/" + games[currentGame].alpha, alphaDone, id, alphaFail);
-	} else {
-		games[id].alphaStatus &= 2;
+function turnsResult(res, err, obj) {
+	for (x in res) {
+		obj.updateTurn(res[x]);
 	}
-}
-
-function get_random_color() {
-    var letters = '0123456789ABCDEF'.split('');
-    var color = '#';
-    for (var i = 0; i < 6; i++ ) {
-        color += letters[Math.round(Math.random() * 15)];
-    }
-    return color;
-}
-
-function hideScreen(screen) {
-	document.getElementById('rightpane').removeChild(screen);
-}
-
-function showScreen(cscreen, nscreen) {
-	setTimeout(allowChange, 600);
-	if (cscreen != null) {
-		cscreen.style.top = "100%";
-		setTimeout(hideScreen, 600, cscreen);
-	}
-	nscreen.style.top = "0px";
-}
-
-var transitioning = false;
-function allowChange() {
-	transitioning = false;
-}
-
-function turnsResult(res, err, id) {
-	if (currentGame == id) {
-		if (turns[id] === undefined) {
-			turns[id] = {};
-			turnObjs[id] = {};
-		}
-		for (x in res) {
-			turns[id][res[x]['turnid']] = res[x];
-			if (!(res[x]['turnid'] in turnObjs[id])) {
-				var obj = document.createElement('div');
-				obj.id = res[x]['turnid'];
-				turnObjs[id][res[x]['turnid']] = obj;
-				currentScreen.querySelector('#turns').appendChild(obj);
-			}
-			updateTurnObj(res[x]['turnid']);
-		}
-	}
-}
-
-function updateTurnObj(id) {
-	out = "";
-	isPlayer = uid == turns[currentGame][id]['playerid'];
-
-	turn_count = currentScreen.querySelector('#turn_count')
-	turn_count.style.display = turns[currentGame][id]['turnnum'] > 0 ? "block" : "none";
-	turn_count.getElementsByTagName("span")[0].innerHTML = turns[currentGame][id]['turnnum'];
-
-	if (turns[currentGame][id]['turnnum'] > 0 || isPlayer) {
-		if (turns[currentGame][id]['turnnum'] == 0) {
-			turnObjs[currentGame][id].className = 'turn_new_round';
-			out += "Your word is " + turns[currentGame][id]['guess'];
-		} else {
-			pegs = "<div class='pegs'>";
-			t = 0;
-			c = turns[currentGame][id]['correct'];
-			while (c - t > 0) {
-				t++;
-				pegs += "<div class='gold'></div>";
-			}
-			s = turns[currentGame][id]['displaced'];
-			while ((s + c) - t > 0) {
-				t++;
-				pegs += "<div class='silver'></div>";
-			}
-			while (t < 4) {
-				t++;
-				pegs += "<div class='white'></div>";
-			}
-			pegs += "</div>";
-			if (isPlayer) {
-				if (turns[currentGame][id]['correct'] == 4) {
-					out += "<img src='image/crown_flipped.png' style='margin-right: 10px; vertical-align: text-top' />";
-					turnObjs[currentGame][id].className = 'turn_win';
-				} else {
-					turnObjs[currentGame][id].className = 'turn_big';
-					out += pegs;
-				}
-				out += turns[currentGame][id]['guess'];
-			out += "<div class='time'>" + timeSince(turns[currentGame][id]['when']) + "</div>";
-			} else {
-				out += "<div class='time'>" + timeSince(turns[currentGame][id]['when']) + "</div>";
-				out += "<span>" + users[games[currentGame]['oppid']]['name']['givenName'] + " guessed " + turns[currentGame][id]['guess'] + "</span>";
-				if (turns[currentGame][id]['correct'] == 4) {
-					turnObjs[currentGame][id].className = 'turn_lose';
-					out += "<img src='image/crown.png' />";
-					out += "<br /><span>" + users[games[currentGame]['oppid']]['name']['givenName'] + "'s word was " + turns[currentGame][id]['oppword'] + "</span>";
-				} else {
-					turnObjs[currentGame][id].className = 'turn_small';
-					out += pegs;
-				}
-			}
-		}
-	}
-	turnObjs[currentGame][id].innerHTML = out;
 }
 
 function timeSince(time) {
@@ -428,8 +466,21 @@ function d(a, b) {
 }
 	
 var fin = "";
+var alpha = $("<div/>", {id: "alpha"});
+var keyboard = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+var offset = 0;
 
-document.onkeydown = function(e) {
+for (x in keyboard) {
+	var row = $("<div/>");
+	for (i = 0; i < keyboard[x].length; i++) {
+		row.append($("<span/>", {id: "alpha_" + offset++, text: keyboard[x].substr(i, 1)})
+			.click(function() { $(this).toggleClass('hidden'); Match.current.updateAlpha(this.id.substr(6)); })
+		);
+	}
+	alpha.append(row);
+}
+
+$(document).keydown(function(e) {
 	c = e.keyCode;
 	if (c >= 65 && c <= 90 && fin.length < 4) {
 		fin += String.fromCharCode(c);
@@ -439,26 +490,9 @@ document.onkeydown = function(e) {
 		return;
 	}
 	e.preventDefault();
-	txtBox = "";
+
 	for (i = 0; i < 4; i++) {
-		if (i < fin.length) {
-			txtBox += "<span>" + fin.substr(i, 1) + "</span>";
-		} else {
-			txtBox += "<div></div>";
-		}
+		Match.current.guessDiv[i].text(fin.substr(i, 1));
+		Match.current.guessDiv[i].attr("class", i < fin.length ? "char" : "");
 	}
-	currentScreen.querySelector("#guess").innerHTML = txtBox;
-}
-
-
-var alpha = "";
-var keyboard = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
-var offset = 0;
-
-for (x in keyboard) {
-	alpha += '<div>';
-	for (i = 0; i < keyboard[x].length; i++) {
-		alpha += '<span id="alpha_' + offset++ + '">' + keyboard[x].substr(i, 1) + '</span>';
-	}
-	alpha += '</div>';
-}
+});

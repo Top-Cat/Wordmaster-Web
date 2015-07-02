@@ -37,7 +37,7 @@ body {
 	font-size: 28px;
 	line-height: 48px;
 }
-#refresh, #menu, #spinner, #spinner div {
+#refresh, #menu, #refresh div {
 	width: 48px;
 	height: 48px;
 	float: right;
@@ -86,7 +86,7 @@ body {
 	from { -webkit-transform: rotate(1080deg); }
 	to { -webkit-transform: rotate(0deg); }
 }
-#spinner {
+#refresh.spinner {
 	background: url('../image/spinner_outer.png');
 	-webkit-animation-name: spin;
 	-webkit-animation-duration: 4s;
@@ -97,7 +97,7 @@ body {
 	from { -webkit-transform: rotate(0deg); }
 	to { -webkit-transform: rotate(1800deg); }
 }
-#spinner div {
+#refresh.spinner div {
 	margin-right: 0;
 	background: url('../image/spinner_inner.png');
 	-webkit-animation-name: spin_inner;
@@ -174,7 +174,7 @@ body {
 	cursor: pointer;
 	padding: 10px;
 }
-.game, .turn_big, .turn_small {
+.game, #turns > div {
 	background: -moz-linear-gradient(top,  rgba(230,230,230,0) 0%, rgba(196,196,196,0.98) 98%, rgba(102,102,102,1) 100%); /* FF3.6+ */
 	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(230,230,230,0)), color-stop(98%,rgba(196,196,196,0.98)), color-stop(100%,rgba(102,102,102,1))); /* Chrome,Safari4+ */
 	background: -webkit-linear-gradient(top,  rgba(230,230,230,0) 0%,rgba(196,196,196,0.98) 98%,rgba(102,102,102,1) 100%); /* Chrome10+,Safari5.1+ */
@@ -243,15 +243,13 @@ body {
 	border-right: 2px solid #666;
 	overflow-y: auto;
 }
-.turn_new_round, .turn_big, .turn_small, .turn_win, .turn_lose {
+#turns > div {
 	cursor: default;
 	padding: 10px 0;
-}
-.turn_small {
 	line-height: 24px;
 }
-.turn_small span {
-	position: absolute;
+#turns > div span {
+	/*position: absolute;
 	height: 21px;
 	vertical-align: text-bottom;
 	display: inline-block;
@@ -261,82 +259,71 @@ body {
 	overflow: hidden;
 	white-space: nowrap;
 	direction: rtl;
-	text-align: left;
+	text-align: left;*/
 }
-.turn_small .pegs {
+#turns .pegs {
 	width: 96px;
 	height: 24px;
 	float: right;
 	margin-right: 10px;
 }
-.turn_lose .time, .turn_small .time {
-	margin-left: 20px;
+#turns .turn_player .pegs {
+	float: left;
+}
+#turns .turn_win .pegs {
+	display: none !important;
+}
+#turns .time {
+	margin: 0 10px 0 20px;
+	font-size: 16px;
 	width: 60px;
-	float: none;
-	display: inline-block;
+	float: left;
 }
-
-.turn_lose img {
-	float: right;
-	margin-right: 10px;
-	vertical-align: text-top;
+#turns .turn_player .time {
+	width: auto;
+	float: right !important;
 }
-
-.turn_lose .time {
+#turns .turn_win .time {
 	height: 38px;
 	float: left;
 }
-
-.turn_new_round {
-	background: -moz-linear-gradient(top,  rgba(211,228,255,0) 0%, rgba(190,214,255,0.98) 98%, rgba(116,159,231,1) 100%); /* FF3.6+ */
-	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(211,228,255,0)), color-stop(98%,rgba(190,214,255,0.98)), color-stop(100%,rgba(116,159,231,1))); /* Chrome,Safari4+ */
-	background: -webkit-linear-gradient(top,  rgba(211,228,255,0) 0%,rgba(190,214,255,0.98) 98%,rgba(116,159,231,1) 100%); /* Chrome10+,Safari5.1+ */
-	background: -o-linear-gradient(top,  rgba(211,228,255,0) 0%,rgba(190,214,255,0.98) 98%,rgba(116,159,231,1) 100%); /* Opera 11.10+ */
-	background: -ms-linear-gradient(top,  rgba(211,228,255,0) 0%,rgba(190,214,255,0.98) 98%,rgba(116,159,231,1) 100%); /* IE10+ */
-	background: linear-gradient(to bottom,  rgba(211,228,255,0) 0%,rgba(190,214,255,0.98) 98%,rgba(116,159,231,1) 100%); /* W3C */
-	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#00d3e4ff', endColorstr='#749fe7',GradientType=0 ); /* IE6-9 */
+#turns .turn_new {
+	background: linear-gradient(to bottom,  rgba(211,228,255,0) 0%,rgba(190,214,255,0.98) 98%,rgba(116,159,231,1) 100%);
 	padding-left: 90px;
 }
-.turn_win, .turn_lose {
-	background: -moz-linear-gradient(top,  rgba(255,239,199,0) 0%, rgba(255,239,199,0) 1%, rgba(255,227,158,1) 98%, rgba(219,169,48,1) 100%); /* FF3.6+ */
-	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(255,239,199,0)), color-stop(1%,rgba(255,239,199,0)), color-stop(98%,rgba(255,227,158,1)), color-stop(100%,rgba(219,169,48,1))); /* Chrome,Safari4+ */
-	background: -webkit-linear-gradient(top,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%); /* Chrome10+,Safari5.1+ */
-	background: -o-linear-gradient(top,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%); /* Opera 11.10+ */
-	background: -ms-linear-gradient(top,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%); /* IE10+ */
-	background: linear-gradient(to bottom,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%); /* W3C */
-	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#00ffefc7', endColorstr='#dba930',GradientType=0 ); /* IE6-9 */
+#turns .turn_win {
+	background: url('../image/crown.png') no-repeat 99% center, linear-gradient(to bottom,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%);
 }
-.turn_win, .turn_big {
+#turns .turn_player.turn_win {
+	background: url('../image/crown_flipped.png') no-repeat 2% center, linear-gradient(to bottom,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%);
+	padding-left: 90px;
+}
+#turns .turn_player {
 	padding-left: 20px;
 	font-size: 36px;
 	line-height: 48px;
 }
-#turns .time {
-	font-size: 16px;
-	margin-right: 10px;
-}
-.pegs {
+#turns .turn_player .pegs {
 	width: 48px;
 	height: 48px;
 	margin-right: 22px;
 	display: inline-block;
 	vertical-align: middle;
 }
-.pegs div {
+#turns .pegs div {
 	float: left;
 	width: 24px;
 	height: 24px;
 }
-.pegs .gold {
+#turns .pegs .gold {
 	background: url('../image/note.png');
 }
-.pegs .silver {
+#turns .pegs .silver {
 	background: url('../image/silver.png');
 }
-.pegs .white {
+#turns .pegs .white {
 	background: url('../image/white.png');
 }
-
 #alpha {
 	position: absolute;
 	right: 0px;
@@ -387,14 +374,15 @@ body {
 	width: 240px;
 	font-size: 52px;
 }
-.gameWindow #guess div, .gameWindow #guess span {
+.gameWindow #guess div {
 	display: inline-block;
 	width: 52px;
 	text-align: center;
 	margin: 0 4px;
-}
-.gameWindow #guess div {
 	border-bottom: 5px solid #000;
+}
+.gameWindow #guess div.char {
+	border-bottom: 0;
 }
 
 #achievements {	
