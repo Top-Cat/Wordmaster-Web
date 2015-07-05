@@ -108,22 +108,35 @@ Achievement.result = function(ach) {
 
 var Match = function() {
 	this.turns = [];
-	this.turnDiv = $('<div/>', {id: "turns"});
-	this.guessDiv = [$('<div/>'), $('<div/>'), $('<div/>'), $('<div/>')];
+
+	var keyboard = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+	var offset = 0;
+	this.alpha = [];
+	this.alphaDiv = $("<div/>", {class: "alpha"});
+
+	for (x in keyboard) {
+		var row = $("<div/>");
+		for (i = 0; i < keyboard[x].length; i++) {
+			row.append(this.alpha[offset] = $("<span/>", {id: "alpha_" + offset++, text: keyboard[x].substr(i, 1)})
+				.click({obj: this}, function(event) { $(this).toggleClass('hidden'); event.data.obj.updateAlpha(this.id.substr(6)); })
+			);
+		}
+		this.alphaDiv.append(row);
+	}
 
 	this.gameWindow = $('<div/>', {class: "gameWindow"})
 	.append($('<div/>', {id: "scores"})
-		.append($('<div/>', {id: "me", text: "0"}))
-		.append($('<div/>', {id: "opp", text: "0"}))
+		.append(this.meScoreDiv = $('<div/>', {text: "0"}))
+		.append(this.oppScoreDiv = $('<div/>', {text: "0"}))
 	)
-	.append(this.turnDiv)
-	.append(Match.alpha)
+	.append(this.turnDiv = $('<div/>', {id: "turns"}))
+	.append(this.alphaDiv)
 	.append($('<div/>', {id: "footer"})
-		.append($('<div/>', {id: "turn_count", text: "Turn"})
+		.append(this.turnCountDiv = $('<div/>', {class: "turn_count", text: "Turn"})
 			.append($('<span/>', {text: "2"}))
 		)
 		.append($('<div/>', {id: "guess"})
-			.append(this.guessDiv)
+			.append(this.guessDiv = [$('<div/>'), $('<div/>'), $('<div/>'), $('<div/>')])
 		)
 	);
 
@@ -190,15 +203,14 @@ Match.prototype.updateDOM = function() {
 	}
 
 	for (i = 0; i < 26; i++) {
-		this.gameWindow.find('#alpha_' + i)
-		.attr("class", ((this.obj.alpha >> i) & 1) == 1 ? "hidden" : "");
+		this.alpha[i].attr("class", ((this.obj.alpha >> i) & 1) == 1 ? "hidden" : "");
 	}
 
 	if (User.me.isLoaded()) {
-		this.gameWindow.find('#me').css("background-image", "url('" + User.me.getImage() + "')");
+		this.meScoreDiv.css("background-image", "url('" + User.me.getImage() + "')");
 	}
 	if (this.getOpponent().isLoaded()) {
-		this.gameWindow.find('#opp').css("background-image", "url('" + this.getOpponent().getImage() + "')");
+		this.oppScoreDiv.css("background-image", "url('" + this.getOpponent().getImage() + "')");
 	}
 
 	for (x in this.turns) {
@@ -309,7 +321,6 @@ Match.prototype.revoke = function() {
 };
 Match.TURNS_PER_REQUEST = 10;
 Match.matches = {};
-Match.alpha = $("<div/>", {id: "alpha"});
 Match.transitioning = false;
 Match.update = function(obj) {
 	if (!Match.matches[obj.gameid]) {
@@ -393,13 +404,12 @@ Turn.prototype.updateDOM = function() {
 		this.turnDiv.remove();
 	}
 
-	turn_count = this.match.gameWindow.find('#turn_count');
 	if (this.getTurnNum() > 0) {
-		turn_count.show();
+		this.match.turnCountDiv.show();
 	} else {
-		turn_count.hide();
+		this.match.turnCountDiv.hide();
 	}
-	turn_count.find("span:first-child").html(this.getTurnNum());
+	this.match.turnCountDiv.children().text(this.getTurnNum());
 
 	if (this.obj.turnnum == 0) {
 		this.turnDiv.addClass('turn_new');
@@ -580,21 +590,6 @@ function signinCallback(authResult) {
 }
 
 var word = "";
-
-$(function() {
-	var keyboard = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
-	var offset = 0;
-
-	for (x in keyboard) {
-		var row = $("<div/>");
-		for (i = 0; i < keyboard[x].length; i++) {
-			row.append($("<span/>", {id: "alpha_" + offset++, text: keyboard[x].substr(i, 1)})
-				.click(function() { $(this).toggleClass('hidden'); Match.current.updateAlpha(this.id.substr(6)); })
-			);
-		}
-		Match.alpha.append(row);
-	}
-});
 
 $(document).keydown(function(e) {
 	c = e.keyCode;

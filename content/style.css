@@ -324,7 +324,7 @@ body {
 #turns .pegs .white {
 	background: url('../image/white.png');
 }
-#alpha {
+.alpha {
 	position: absolute;
 	right: 0px;
 	top: 50px;
@@ -332,20 +332,20 @@ body {
 	width: 50%;
 	padding-top: 50px;
 }
-#alpha div {
+.alpha div {
 	margin: 10px 0;
 	text-align: center;
 }
-#alpha span {
+.alpha span {
 	cursor: pointer;
 	margin: 5px;
 	font-size: 32px;
 	display: inline-block;
 }
-#alpha .hidden {
+.alpha .hidden {
 	color: #AAA;
 }
-#alpha .hidden:after {
+.alpha .hidden:after {
 	content: ' ';
 	width: 130%;
 	height: 6px;
@@ -356,18 +356,18 @@ body {
 	margin-top: -21px;
 	margin-left: -3px;
 }
-.gameWindow #opp, .gameWindow #me {
+#scores div {
 	height: 50px;
 	background-repeat: no-repeat;
-}
-.gameWindow #opp {
+
 	float: right;
 	padding-right: 60px;
 	background-position: right center;
 }
-.gameWindow #me {
+#scores :first-child {
 	float: left;
-	padding-left: 60px;
+	padding: 0 0 0 60px;
+	background-position: left center;
 }
 .gameWindow #guess {
 	margin: auto;
