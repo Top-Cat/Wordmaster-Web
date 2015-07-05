@@ -106,8 +106,60 @@ Achievement.result = function(ach) {
 
 // -------------------------------------------------------------------- //
 
+var Error = function() {
+	this.errorDiv = $('<div/>', {class: "error"})
+		.append(this.nameDiv = $('<h2/>'))
+		.append(this.descDiv = $('<p/>'));
+
+	this.queue = [];
+	this.visible = false;
+};
+Error.prototype.getElement = function() {
+	return this.errorDiv;
+};
+Error.prototype.show = function(obj) {
+	console.trace();
+	this.nextError = obj;
+	this.trigger();
+};
+Error.prototype.trigger = function(obj) {
+	if (!this.visible && this.nextError) {
+		this.visible = true;
+
+		this.nameDiv.text(this.nextError.name);
+		this.descDiv.text(this.nextError.desc);
+		this.nextError = false;
+
+		this.errorDiv.css({marginTop: "0px"});
+		this.timeout = setTimeout(function(obj) {
+			obj.hide.apply(obj);
+		}, 5000, this);
+	} else {
+		this.hide();
+	}
+};
+Error.prototype.hide = function() {
+	this.errorDiv.css({marginTop: "-50px"});
+	clearTimeout(this.timeout);
+	this.timeout = setTimeout(function(obj) {
+		obj.visible = false;
+		obj.trigger();
+	}, 600, this);
+};
+Error.NETWORK	= {name: "Network Unavailable", desc: "Please check your data connection"};
+Error.TURN	= {name: "It's not your turn!", desc: "Wait for your opponent to take their turn."};
+Error.WORD	= {name: "Not a word", desc: "That word is not in the Wordmaster dictionary."};
+Error.SERVER	= {name: "Server Error", desc: "Something went wrong. Try again later."};
+Error.OPPONENT	= {name: "Game not ready", desc: "Opponent hasn't chosen their word yet."};
+Error.MATCH	= {name: "Match already exists", desc: "You're already playing against that person."};
+Error.WORDSET	= {name: "Word already set", desc: "You've already chosen your word for this game."};
+Error.AUTOMATCH	= {name: "Auto match pending", desc: "You're already in the queue for matching."};
+
+// -------------------------------------------------------------------- //
+
 var Match = function() {
 	this.turns = [];
+	this.error = new Error();
 
 	var keyboard = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 	var offset = 0;
@@ -125,17 +177,18 @@ var Match = function() {
 	}
 
 	this.gameWindow = $('<div/>', {class: "gameWindow"})
-	.append($('<div/>', {id: "scores"})
+	.append($('<div/>', {class: "scores"})
 		.append(this.meScoreDiv = $('<div/>', {text: "0"}))
 		.append(this.oppScoreDiv = $('<div/>', {text: "0"}))
 	)
+	.append(this.error.getElement())
 	.append(this.turnDiv = $('<div/>', {id: "turns"}))
 	.append(this.alphaDiv)
 	.append($('<div/>', {id: "footer"})
 		.append(this.turnCountDiv = $('<div/>', {class: "turn_count", text: "Turn"})
 			.append($('<span/>', {text: "2"}))
 		)
-		.append($('<div/>', {id: "guess"})
+		.append($('<div/>', {class: "guess"})
 			.append(this.guessDiv = [$('<div/>'), $('<div/>'), $('<div/>'), $('<div/>')])
 		)
 	);
@@ -149,6 +202,9 @@ var Match = function() {
 	.append(this.oppImg)
 	.append(this.textDiv)
 	.append(this.timeDiv);
+};
+Match.prototype.showError = function(obj) {
+	this.error.show(obj);
 };
 Match.prototype.getListItem = function() {
 	return this.listItem;
@@ -176,14 +232,33 @@ Match.prototype.update = function(obj) {
 		.click($.proxy(function() { this.show(); }, this))
 	);
 
-	this.getMoreTurns();
+	this.getMoreTurns(0, 0);
 	this.updateDOM();
 
 	return this;
 };
 Match.prototype.getMoreTurns = function(r, e) {
-	if (e == 3) this.obj.turn = false;
-	if (e == 6) this.obj.needword = false;
+	switch (e) {
+		case 0:
+			break;
+		case 1:
+			this.showError(Error.WORD);
+			break;
+		case 2:
+			this.showError(Error.OPPONENT);
+			break;
+		case 3:
+			this.showError(Error.TURN);
+			this.obj.turn = false;
+			break;
+		case 6:
+			this.showError(Error.WORDSET);
+			this.obj.needword = false;
+			break;
+		default:
+			this.showError(Error.SERVER);
+			break;
+	}
 
 	this.request(this, "getTurns", this.pivot ? [this.pivot, Match.TURNS_PER_REQUEST] : [], this.turnResult);
 };
@@ -269,11 +344,15 @@ Match.prototype.alphaFail = function(r, err) {
 	this.alphaDone(r, err);
 };
 Match.prototype.alphaDone = function(r, err) {
+	if (err != 0) {
+		this.alphaStatus |= 2;
+	}
+
 	if ((this.alphaStatus & 2) == 2) {
-		this.alphaStatus &= 1;
+		this.alphaStatus |= 1;
 		this.request(this, "updateAlpha", [this.obj.alpha], this.alphaDone, this.alphaFail);
 	} else {
-		this.alphaStatus &= 2;
+		this.alphaStatus = 0;
 	}
 };
 Match.prototype.updateTurn = function(obj) {
@@ -299,15 +378,11 @@ Match.prototype.turnResult = function(res, err) {
 		this.updateTurn(res[x]);
 	}
 	if (res.length == Match.TURNS_PER_REQUEST) {
-		this.request(this, "getTurns", this.pivot ? [this.pivot, Match.TURNS_PER_REQUEST] : [], this.turnResult);
+		this.getMoreTurns(0, 0);
 	}
 };
 Match.prototype.playWord = function(word) {
-	if (!this.isTurn()) {
-		//TODO: Util.showError(6);
-	} else {
-		this.request(this, this.needsWord() ? "setWord" : "takeTurn", [word], this.getMoreTurns);
-	}
+	this.request(this, this.needsWord() ? "setWord" : "takeTurn", [word], this.getMoreTurns);
 };
 Match.prototype.request = function() {
 	arguments[2].unshift(this.getId());
@@ -353,7 +428,7 @@ Match.result = function(res, err) {
 		}
 		Match.sort();
 	} else {
-		alert('error ' + err);
+		Match.current.showError(Error.SERVER);
 	}
 	setTimeout(function() { if (Match.current === undefined) { $('#gamelist .game').first().click(); } }, 1000);
 };
@@ -535,6 +610,9 @@ API.internal = function(scope, url, func, fail) {
 			func.apply(scope, [data['response'], data['error']]);
 		}
 	}).fail(function() {
+		if (Match.current) {
+			Match.current.showError(Error.NETWORK);
+		}
 		fail.apply(scope);
 	});
 };
