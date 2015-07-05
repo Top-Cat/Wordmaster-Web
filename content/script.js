@@ -118,7 +118,6 @@ Error.prototype.getElement = function() {
 	return this.errorDiv;
 };
 Error.prototype.show = function(obj) {
-	console.trace();
 	this.nextError = obj;
 	this.trigger();
 };
@@ -134,7 +133,7 @@ Error.prototype.trigger = function(obj) {
 		this.timeout = setTimeout(function(obj) {
 			obj.hide.apply(obj);
 		}, 5000, this);
-	} else {
+	} else if (this.visible) {
 		this.hide();
 	}
 };
@@ -169,9 +168,7 @@ var Match = function() {
 	for (x in keyboard) {
 		var row = $("<div/>");
 		for (i = 0; i < keyboard[x].length; i++) {
-			row.append(this.alpha[offset] = $("<span/>", {id: "alpha_" + offset++, text: keyboard[x].substr(i, 1)})
-				.click({obj: this}, function(event) { $(this).toggleClass('hidden'); event.data.obj.updateAlpha(this.id.substr(6)); })
-			);
+			row.append(this.alpha[offset] = $("<span/>", {id: "alpha_" + offset++, text: keyboard[x].substr(i, 1)}));
 		}
 		this.alphaDiv.append(row);
 	}
@@ -317,6 +314,11 @@ Match.prototype.show = function() {
 	this.getListItem().addClass("selectedgame");
 
 	$('#rightpane').append(this.gameWindow);
+
+	for (i in this.alpha) {
+		this.alpha[i].click({obj: this}, function(event) { $(this).toggleClass('hidden'); event.data.obj.updateAlpha(this.id.substr(6)); });
+	}
+
 	setTimeout(function(obj) {
 		obj.gameWindow.css({top: "0%"});
 		setTimeout(function() {
