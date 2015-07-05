@@ -117,7 +117,7 @@ var Match = function() {
 		.append($('<div/>', {id: "opp", text: "0"}))
 	)
 	.append(this.turnDiv)
-	.append(alpha)
+	.append(Match.alpha)
 	.append($('<div/>', {id: "footer"})
 		.append($('<div/>', {id: "turn_count", text: "Turn"})
 			.append($('<span/>', {text: "2"}))
@@ -132,15 +132,10 @@ var Match = function() {
 	this.oppImg = $('<img/>');
 	this.textDiv = $('<span/>');
 
-	var matchObj = this;
-
 	this.listItem = $('<div/>', {class: "game"})
-	.click(function() { matchObj.show(); })
 	.append(this.oppImg)
 	.append(this.textDiv)
 	.append(this.timeDiv);
-
-	$('#gamelist > :first-child').append(this.getListItem());
 };
 Match.prototype.getListItem = function() {
 	return this.listItem;
@@ -157,12 +152,27 @@ Match.prototype.getTimeSince = function() {
 Match.prototype.isTurn = function() {
 	return this.obj.turn || this.obj.needword;
 };
+Match.prototype.needsWord = function() {
+	return this.obj.needword;
+};
 Match.prototype.update = function(obj) {
 	this.obj = obj;
 
+	$('#gamelist > div').append(
+		this.getListItem()
+		.click($.proxy(function() { this.show(); }, this))
+	);
+
+	this.getMoreTurns();
 	this.updateDOM();
 
 	return this;
+};
+Match.prototype.getMoreTurns = function(r, e) {
+	if (e == 3) this.obj.turn = false;
+	if (e == 6) this.obj.needword = false;
+
+	this.request(this, "getTurns", this.pivot ? [this.pivot, Match.TURNS_PER_REQUEST] : [], this.turnResult);
 };
 Match.prototype.updateDOM = function() {
 	if (this.getOpponent().isLoaded()) {
@@ -175,6 +185,24 @@ Match.prototype.updateDOM = function() {
 
 	if (this.isTurn()) {
 		this.getListItem().append(this.noteDiv);
+	} else {
+		this.noteDiv.remove();
+	}
+
+	for (i = 0; i < 26; i++) {
+		this.gameWindow.find('#alpha_' + i)
+		.attr("class", ((this.obj.alpha >> i) & 1) == 1 ? "hidden" : "");
+	}
+
+	if (User.me.isLoaded()) {
+		this.gameWindow.find('#me').css("background-image", "url('" + User.me.getImage() + "')");
+	}
+	if (this.getOpponent().isLoaded()) {
+		this.gameWindow.find('#opp').css("background-image", "url('" + this.getOpponent().getImage() + "')");
+	}
+
+	for (x in this.turns) {
+		this.turns[x].updateDOM();
 	}
 };
 Match.prototype.hide = function() {
@@ -201,11 +229,6 @@ Match.prototype.show = function() {
 	Match.current = this;
 	this.getListItem().addClass("selectedgame");
 
-	for (i = 0; i < 26; i++) {
-		this.gameWindow.find('#alpha_' + i)
-		.attr("class", ((this.obj.alpha >> i) & 1) == 1 ? "hidden" : "");
-	}
-
 	$('#rightpane').append(this.gameWindow);
 	setTimeout(function(obj) {
 		obj.gameWindow.css({top: "0%"});
@@ -213,22 +236,13 @@ Match.prototype.show = function() {
 			Match.transitioning = false;
 		}, 600);
 	}, 10, this);
-
-	if (User.me) {
-		this.gameWindow.find('#me').css("background-image", "url('" + User.me.getImage() + "')");
-	}
-	if (this.getOpponent().isLoaded()) {
-		this.gameWindow.find('#opp').css("background-image", "url('" + this.getOpponent().getImage() + "')");
-	}
-
-	API.request(this, "getTurns", [this.getId()], this.turnResult);
 };
 Match.prototype.updateAlpha = function(off) {
 	this.obj.alpha ^= (1 << off);
 
 	if ((this.alphaStatus & 1) == 0) {
 		this.alphaStatus |= 1;
-		API.request(this, "updateAlpha", [this.getId(), this.obj.alpha], this.alphaDone, this.alphaFail);
+		this.request(this, "updateAlpha", [this.obj.alpha], this.alphaDone, this.alphaFail);
 	} else {
 		this.alphaStatus |= 2;
 	}
@@ -245,7 +259,7 @@ Match.prototype.alphaFail = function(r, err) {
 Match.prototype.alphaDone = function(r, err) {
 	if ((this.alphaStatus & 2) == 2) {
 		this.alphaStatus &= 1;
-		API.request(this, "updateAlpha", [this.getId(), this.obj.alpha], this.alphaDone, this.alphaFail);
+		this.request(this, "updateAlpha", [this.obj.alpha], this.alphaDone, this.alphaFail);
 	} else {
 		this.alphaStatus &= 2;
 	}
@@ -255,13 +269,47 @@ Match.prototype.updateTurn = function(obj) {
 		this.turns[obj.turnid] = new Turn(this);
 	}
 	this.turns[obj.turnid].update(obj);
+
+	if (!this.pivot || obj.turnid > this.pivot) {
+		this.pivot = obj.turnid;
+	}
+
+	// Update state
+	if (obj.guess.length > 0) {
+		this.obj.needword = obj.correct == 4;
+	}
+	if (obj.turnnum > 0 && this.getOpponent().isLoaded()) {
+		this.obj.turn = obj.playerid == this.getOpponent().getId();
+	}
 };
 Match.prototype.turnResult = function(res, err) {
 	for (x in res) {
 		this.updateTurn(res[x]);
 	}
+	if (res.length == Match.TURNS_PER_REQUEST) {
+		this.request(this, "getTurns", this.pivot ? [this.pivot, Match.TURNS_PER_REQUEST] : [], this.turnResult);
+	}
 };
+Match.prototype.playWord = function(word) {
+	if (!this.isTurn()) {
+		//TODO: Util.showError(6);
+	} else {
+		this.request(this, this.needsWord() ? "setWord" : "takeTurn", [word], this.getMoreTurns);
+	}
+};
+Match.prototype.request = function() {
+	arguments[2].unshift(this.getId());
+	API.request.apply(this, arguments);
+};
+Match.prototype.revoke = function() {
+	for (x in this.turns) {
+		this.pivot = x - 1;
+		return;
+	}
+};
+Match.TURNS_PER_REQUEST = 10;
 Match.matches = {};
+Match.alpha = $("<div/>", {id: "alpha"});
 Match.transitioning = false;
 Match.update = function(obj) {
 	if (!Match.matches[obj.gameid]) {
@@ -304,6 +352,11 @@ Match.loadGames = function() {
 		API.request(this, "getMatches", [], Match.result);
 	}
 };
+Match.revoke = function() {
+	for (x in Match.matches) {
+		Match.matches[x].revoke();
+	}
+};
 
 // -------------------------------------------------------------------- //
 
@@ -325,11 +378,6 @@ Turn.prototype.update = function(obj) {
 	this.obj = obj;
 
 	this.updateDOM();
-
-	if (this.getTurnNum() > 0 || this.isPlayer()) {
-		this.match.turnDiv.append(this.turnDiv);
-		this.match.sortTurns();
-	}
 };
 Turn.prototype.getElement = function() {
 	this.updateDOM();
@@ -337,6 +385,13 @@ Turn.prototype.getElement = function() {
 };
 Turn.prototype.updateDOM = function() {
 	this.turnDiv.attr("id", this.getId());
+
+	if (this.getTurnNum() > 0 || this.isPlayer()) {
+		this.match.turnDiv.append(this.turnDiv);
+		this.match.sortTurns();
+	} else {
+		this.turnDiv.remove();
+	}
 
 	turn_count = this.match.gameWindow.find('#turn_count');
 	if (this.getTurnNum() > 0) {
@@ -359,6 +414,8 @@ Turn.prototype.updateDOM = function() {
 
 		if (this.isPlayer()) {
 			this.turnDiv.addClass("turn_player");
+		} else {
+			this.turnDiv.removeClass("turn_player");
 		}
 		this.textDiv.html(
 			(this.isPlayer() ? this.obj.guess : this.match.getOpponent().getName() + " guessed " +
@@ -369,6 +426,8 @@ Turn.prototype.updateDOM = function() {
 
 		if (this.isWin()) {
 			this.turnDiv.addClass("turn_win");
+		} else {
+			this.turnDiv.removeClass("turn_win");
 		}
 
 		this.timeDiv.text(this.getTimeSince());
@@ -410,7 +469,7 @@ User.prototype.getImage = function() {
 	return this.obj.image.url;
 };
 User.prototype.getName = function(long) {
-	return long ? this.obj.displayName : this.obj.name.givenName;
+	return this.isLoaded() ? (long ? this.obj.displayName : this.obj.name.givenName) : "";
 };
 User.prototype.getId = function() {
 	return this.obj.id;
@@ -445,6 +504,7 @@ User.revoke = function() {
 var API = function() {};
 API.baseURL = "https://thomasc.co.uk/wm/";
 API.identified = false;
+API.token = "";
 API.request = function(scope, endpoint, params, func, fail) {
 	if (!API.identified) { console.log("NOT IDENTIFIED"); return; };
 
@@ -452,6 +512,7 @@ API.request = function(scope, endpoint, params, func, fail) {
 	API._request(scope, endpoint, params, func, fail);
 };
 API.identify = function(token) {
+	API.token = token;
 	API._request(this, "identify", [token], API.result);
 };
 API._request = function(scope, endpoint, params, func, fail) {
@@ -479,8 +540,14 @@ API.result = function(res, err) {
 		console.log(err);
 	}
 };
-API.revoke = function() {
+API.revoke = function(func) {
 	API.identified = false;
+	$.ajax({
+		url: "https://accounts.google.com/o/oauth2/revoke?token=" + API.token,
+		contentType: "application/json",
+		dataType: 'jsonp',
+		success: func
+	});
 };
 
 // -------------------------------------------------------------------- //
@@ -496,18 +563,15 @@ function signinCallback(authResult) {
 			gapi.client.request({path: "/games/v1/achievements", callback: Achievement.result});
 		});
 		$('#menu_log').click(function() {
-			$.ajax({
-			url: "https://accounts.google.com/o/oauth2/revoke?token=" + token,
-			contentType: "application/json",
-			dataType: 'jsonp',
-			success: function(data) {
-				API.revoke();
+			API.revoke(function() {
 				User.revoke();
+				Match.revoke();
 
 				$('#overlay').show();
 				Match.current.hide();
-				$('#gamelist > :first-child').empty();
-			}});
+				delete Match.current;
+				$('#gamelist > div > div').remove();
+			});
 		});
 		$('#ach_header').click(function() {
 			$('#achievements').hide();
@@ -518,7 +582,6 @@ function signinCallback(authResult) {
 var word = "";
 
 $(function() {
-	var alpha = $("<div/>", {id: "alpha"});
 	var keyboard = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 	var offset = 0;
 
@@ -529,7 +592,7 @@ $(function() {
 				.click(function() { $(this).toggleClass('hidden'); Match.current.updateAlpha(this.id.substr(6)); })
 			);
 		}
-		alpha.append(row);
+		Match.alpha.append(row);
 	}
 });
 
@@ -539,6 +602,9 @@ $(document).keydown(function(e) {
 		word += String.fromCharCode(c);
 	} else if (c == 8) {
 		word = word.substr(0, word.length - 1);
+	} else if (c == 13) {
+		Match.current.playWord(word);
+		word = "";
 	} else {
 		return;
 	}
