@@ -174,24 +174,12 @@ body {
 	cursor: pointer;
 	padding: 10px;
 }
-.game, #turns > div {
-	background: -moz-linear-gradient(top,  rgba(230,230,230,0) 0%, rgba(196,196,196,0.98) 98%, rgba(102,102,102,1) 100%); /* FF3.6+ */
-	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(230,230,230,0)), color-stop(98%,rgba(196,196,196,0.98)), color-stop(100%,rgba(102,102,102,1))); /* Chrome,Safari4+ */
-	background: -webkit-linear-gradient(top,  rgba(230,230,230,0) 0%,rgba(196,196,196,0.98) 98%,rgba(102,102,102,1) 100%); /* Chrome10+,Safari5.1+ */
-	background: -o-linear-gradient(top,  rgba(230,230,230,0) 0%,rgba(196,196,196,0.98) 98%,rgba(102,102,102,1) 100%); /* Opera 11.10+ */
-	background: -ms-linear-gradient(top,  rgba(230,230,230,0) 0%,rgba(196,196,196,0.98) 98%,rgba(102,102,102,1) 100%); /* IE10+ */
+.game, .turn {
 	background: linear-gradient(to bottom,  rgba(230,230,230,0) 0%,rgba(196,196,196,0.98) 98%,rgba(102,102,102,1) 100%); /* W3C */
-	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#00e6e6e6', endColorstr='#666666',GradientType=0 ); /* IE6-9 */
 }
 .selectedgame {
 	background: rgb(60,131,241); /* Old browsers */
-	background: -moz-linear-gradient(top,  rgba(60,131,241,1) 0%, rgba(52,90,225,1) 98%, rgba(46,75,195,1) 100%); /* FF3.6+ */
-	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(60,131,241,1)), color-stop(98%,rgba(52,90,225,1)), color-stop(100%,rgba(46,75,195,1))); /* Chrome,Safari4+ */
-	background: -webkit-linear-gradient(top,  rgba(60,131,241,1) 0%,rgba(52,90,225,1) 98%,rgba(46,75,195,1) 100%); /* Chrome10+,Safari5.1+ */
-	background: -o-linear-gradient(top,  rgba(60,131,241,1) 0%,rgba(52,90,225,1) 98%,rgba(46,75,195,1) 100%); /* Opera 11.10+ */
-	background: -ms-linear-gradient(top,  rgba(60,131,241,1) 0%,rgba(52,90,225,1) 98%,rgba(46,75,195,1) 100%); /* IE10+ */
 	background: linear-gradient(to bottom,  rgba(60,131,241,1) 0%,rgba(52,90,225,1) 98%,rgba(46,75,195,1) 100%); /* W3C */
-	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#3c83f1', endColorstr='#2e4bc3',GradientType=0 ); /* IE6-9 */
 	color: #E5FFFE;
 }
 .game img {
@@ -237,7 +225,7 @@ body {
 	background-color: #B3B3B3;
 	width: 100%;
 }
-.gameWindow #turns {
+.turns {
 	position: absolute;
 	left: 0px;
 	top: 50px;
@@ -246,12 +234,16 @@ body {
 	border-right: 2px solid #666;
 	overflow-y: auto;
 }
-#turns > div {
+.turns > div {
+	height: 100%;
+	margin-top: 12px;
+}
+.turn {
 	cursor: default;
 	padding: 10px 0;
 	line-height: 24px;
 }
-#turns > div span {
+.turns span {
 	/*position: absolute;
 	height: 21px;
 	vertical-align: text-bottom;
@@ -264,67 +256,67 @@ body {
 	direction: rtl;
 	text-align: left;*/
 }
-#turns .pegs {
+.pegs {
 	width: 96px;
 	height: 24px;
 	float: right;
 	margin-right: 10px;
 }
-#turns .turn_player .pegs {
+.turn_player .pegs {
 	float: left;
 }
-#turns .turn_win .pegs {
+.turn_win .pegs {
 	display: none !important;
 }
-#turns .time {
+.turns .time {
 	margin: 0 10px 0 20px;
 	font-size: 16px;
 	width: 60px;
 	float: left;
 }
-#turns .turn_player .time {
+.turn_player .time {
 	width: auto;
 	float: right !important;
 }
-#turns .turn_win .time {
+.turn_win .time {
 	float: left;
 	line-height: 48px;
 }
-#turns .turn_new {
+.turn_new {
 	background: linear-gradient(to bottom,  rgba(211,228,255,0) 0%,rgba(190,214,255,0.98) 98%,rgba(116,159,231,1) 100%);
 	padding-left: 90px;
 }
-#turns .turn_win {
+.turn_win {
 	background: url('../image/crown.png') no-repeat 99% center, linear-gradient(to bottom,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%);
 }
-#turns .turn_player.turn_win {
+.turn_player.turn_win {
 	background: url('../image/crown_flipped.png') no-repeat 2% center, linear-gradient(to bottom,  rgba(255,239,199,0) 0%,rgba(255,239,199,0) 1%,rgba(255,227,158,1) 98%,rgba(219,169,48,1) 100%);
 	padding-left: 90px;
 }
-#turns .turn_player {
+.turn_player {
 	padding-left: 20px;
 	font-size: 36px;
 	line-height: 48px;
 }
-#turns .turn_player .pegs {
+.turn_player .pegs {
 	width: 48px;
 	height: 48px;
 	margin-right: 22px;
 	display: inline-block;
 	vertical-align: middle;
 }
-#turns .pegs div {
+.pegs div {
 	float: left;
 	width: 24px;
 	height: 24px;
 }
-#turns .pegs .gold {
+.pegs .gold {
 	background: url('../image/note.png');
 }
-#turns .pegs .silver {
+.pegs .silver {
 	background: url('../image/silver.png');
 }
-#turns .pegs .white {
+.pegs .white {
 	background: url('../image/white.png');
 }
 .alpha {
@@ -519,16 +511,14 @@ body {
 	text-align: center;
 	font-size: 24px;
 }
-
-#turn_count {
+.turn_count {
 	display: none;
 
 	position: absolute;
 	text-align: center;
 	margin: 0 10px;
 }
-
-#turn_count span {
+.turn_count span {
 	display: block;
 	font-size: 48px;
 	line-height: 38px;

@@ -179,7 +179,10 @@ var Match = function() {
 		.append(this.oppScoreDiv = $('<div/>', {text: "0"}))
 	)
 	.append(this.error.getElement())
-	.append(this.turnDiv = $('<div/>', {id: "turns"}))
+	.append(this.scrollDiv = $('<div/>', {class: "turns"})
+		.scroll($.proxy(this.scroll, this))
+		.append(this.turnDiv = $('<div/>'))
+	)
 	.append(this.alphaDiv)
 	.append($('<div/>', {id: "footer"})
 		.append(this.turnCountDiv = $('<div/>', {class: "turn_count", text: "Turn"})
@@ -199,6 +202,14 @@ var Match = function() {
 	.append(this.oppImg)
 	.append(this.textDiv)
 	.append(this.timeDiv);
+};
+Match.prototype.scroll = function(event) {
+	if (this.scrollDiv.scrollTop() < 12 && this.lastpivot) {
+		this.request(this, "getTurns", [this.lastpivot, -Match.TURNS_PER_REQUEST], this.turnResult);
+	}
+};
+Match.prototype.timer = function() {
+	this.getMoreTurns(0, 0);
 };
 Match.prototype.showError = function(obj) {
 	this.error.show(obj);
@@ -247,10 +258,12 @@ Match.prototype.getMoreTurns = function(r, e) {
 		case 3:
 			this.showError(Error.TURN);
 			this.obj.turn = false;
+			this.updateDOM();
 			break;
 		case 6:
 			this.showError(Error.WORDSET);
 			this.obj.needword = false;
+			this.updateDOM();
 			break;
 		default:
 			this.showError(Error.SERVER);
@@ -264,6 +277,9 @@ Match.prototype.updateDOM = function() {
 		this.oppImg.attr("src", this.getOpponent().getImage());
 		this.textDiv.text("vs " + this.getOpponent().getName(true));
 	}
+
+	this.meScoreDiv.text(this.obj.pscore);
+	this.oppScoreDiv.text(this.obj.oscore);
 
 	this.listItem.attr("id", this.getId());
 	this.timeDiv.text(this.getTimeSince());
@@ -288,9 +304,11 @@ Match.prototype.updateDOM = function() {
 	for (x in this.turns) {
 		this.turns[x].updateDOM();
 	}
+	Match.sort();
 };
 Match.prototype.hide = function() {
 	this.getListItem().removeClass("selectedgame");
+	clearInterval(this.interval);
 
 	setTimeout(function(obj) {
 		obj.gameWindow.css({top: "100%"});
@@ -312,6 +330,7 @@ Match.prototype.show = function() {
 	Match.old = Match.current;
 	Match.current = this;
 	this.getListItem().addClass("selectedgame");
+	this.interval = setInterval($.proxy(this.timer, this), 5000);
 
 	$('#rightpane').append(this.gameWindow);
 
@@ -321,6 +340,9 @@ Match.prototype.show = function() {
 
 	setTimeout(function(obj) {
 		obj.gameWindow.css({top: "0%"});
+		if (obj.turns[obj.pivot]) {
+			obj.scrollDiv.scrollTo(obj.turns[obj.pivot].getElement());
+		}
 		setTimeout(function() {
 			Match.transitioning = false;
 		}, 600);
@@ -363,16 +385,33 @@ Match.prototype.updateTurn = function(obj) {
 	}
 	this.turns[obj.turnid].update(obj);
 
-	if (!this.pivot || obj.turnid > this.pivot) {
-		this.pivot = obj.turnid;
+	if (obj.turnid == 0) {
+		this.turnDiv.css({marginTop: 0});
 	}
 
-	// Update state
-	if (obj.guess.length > 0) {
-		this.obj.needword = obj.correct == 4;
+	if (this.lastpivot === undefined || obj.turnid < this.lastpivot) {
+		this.lastpivot = obj.turnid;
 	}
-	if (obj.turnnum > 0 && this.getOpponent().isLoaded()) {
-		this.obj.turn = obj.playerid == this.getOpponent().getId();
+	if (this.pivot === undefined || obj.turnid > this.pivot) {
+		this.pivot = obj.turnid;
+
+		// Update state
+		if (obj.guess.length > 0) {
+			this.obj.needword = obj.correct == 4;
+		}
+		if (obj.turnnum > 0 && this.getOpponent().isLoaded()) {
+			this.obj.turn = obj.playerid == this.getOpponent().getId();
+		}
+
+		if (obj.turnnum > 0 && obj.correct < 4) {
+			this.turnCountDiv.show();
+		} else {
+			this.turnCountDiv.hide();
+		}
+		this.turnCountDiv.children().text(obj.turnnum);
+
+		this.updateDOM();
+		Match.loadGames();
 	}
 };
 Match.prototype.turnResult = function(res, err) {
@@ -399,6 +438,14 @@ Match.prototype.revoke = function() {
 Match.TURNS_PER_REQUEST = 10;
 Match.matches = {};
 Match.transitioning = false;
+Match.counter = 0;
+Match.interval = 30;
+setInterval(function() {
+	if (Match.counter++ > Match.interval) {
+		Match.loadGames();
+		Match.counter = 0;
+	}
+}, 1000);
 Match.update = function(obj) {
 	if (!Match.matches[obj.gameid]) {
 		Match.matches[obj.gameid] = new Match();
@@ -423,16 +470,14 @@ Match.sort = function() {
 	}).detach().appendTo(games);
 };
 Match.result = function(res, err) {
-	$('#refresh').removeClass('spinner');
 	if (err == 0) {
 		for (x in res) {
 			Match.update(res[x]);
 		}
-		Match.sort();
 	} else {
 		Match.current.showError(Error.SERVER);
 	}
-	setTimeout(function() { if (Match.current === undefined) { $('#gamelist .game').first().click(); } }, 1000);
+	setTimeout(function() { $('#refresh').removeClass('spinner'); if (Match.current === undefined) { $('#gamelist .game').first().click(); } }, 200);
 };
 Match.loadGames = function() {
 	if (!$('#refresh').hasClass('spinner')) {
@@ -454,7 +499,7 @@ var Turn = function(match) {
 	this.pegsDiv = $("<div/>", {class: "pegs"});
 	this.textDiv = $("<span/>");
 
-	this.turnDiv = $("<div/>")
+	this.turnDiv = $("<div/>", {class: "turn"})
 		.append(this.pegsDiv)
 		.append(this.timeDiv)
 		.append(this.textDiv);
@@ -480,13 +525,6 @@ Turn.prototype.updateDOM = function() {
 	} else {
 		this.turnDiv.remove();
 	}
-
-	if (this.getTurnNum() > 0) {
-		this.match.turnCountDiv.show();
-	} else {
-		this.match.turnCountDiv.hide();
-	}
-	this.match.turnCountDiv.children().text(this.getTurnNum());
 
 	if (this.obj.turnnum == 0) {
 		this.turnDiv.addClass('turn_new');
@@ -707,3 +745,21 @@ function timeSince(time) {
 function d(a, b) {
 	return Math.floor(a / b);
 }
+
+$.fn.scrollTo = function( target, options, callback ){
+  if(typeof options == 'function' && arguments.length == 2){ callback = options; options = target; }
+  var settings = $.extend({
+    scrollTarget  : target,
+    offsetTop     : 0,
+    duration      : 0,
+    easing        : 'swing'
+  }, options);
+  return this.each(function(){
+    var scrollPane = $(this);
+    var scrollTarget = (typeof settings.scrollTarget == "number") ? settings.scrollTarget : $(settings.scrollTarget);
+    var scrollY = (typeof scrollTarget == "number") ? scrollTarget : scrollTarget.offset().top - scrollPane.offset().top + scrollPane.scrollTop() - parseInt(settings.offsetTop);
+    scrollPane.animate({scrollTop : scrollY }, parseInt(settings.duration), settings.easing, function(){
+      if (typeof callback == 'function') { callback.call(this); }
+    });
+  });
+};
