@@ -1,53 +1,53 @@
-var Achievement = function() {};
+var Achievement = function() {
+	Achievement.listElement.append(this.element = $('<div/>', {class: "achievement"})
+		.append(this.nameDiv = $('<h2/>'))
+		.append(this.descDiv = $('<span/>'))
+	);
+	this.infoDiv = $('<span/>', {class: "progress"})
+		.append(this.infoTextDiv = $('<span/>', {class: "text"}))
+		.append(this.infoDispDiv = $('<span/>'));
+	this.imgDiv = $('<img/>');
+	this.lockDiv = $('<span/>', {class: "unlocked"});
+	this.circleDiv = $('<span/>', {class: "circle"});
+};
 Achievement.prototype.collect = function(obj) {
 	for (p in obj) {
 		if (obj.hasOwnProperty(p)) {
 			this[p] = obj[p];
 		}
 	}
-	return this;
+	this.updateDOM();
 };
-Achievement.prototype.getElement = function() {
-	achElem = $('<div/>', {text: this.getDescription()});
-	achElem.prepend($('<h1/>', {text: this.getName()}));
+Achievement.prototype.updateDOM = function() {
+	this.descDiv.text(this.getDescription());
+	this.nameDiv.text(this.getName());
+
 	if (this.getState() == "UNLOCKED") {
-		unlocked++;
-		achElem.prepend($('<span/>', {class: "unlocked"}));
-	}
-	if (this.getType() == "INCREMENTAL") {
-		progress = $('<span/>', {class: "progress"})
-			.append(
-			$('<span/>',
-				{
-					class: "text",
-					text: this.getProgress(100) + "%"
-				}
-			)
-		);
-
-		circle = $('<span style="-webkit-transform: rotate(' + this.getProgress(360) + 'deg)"></span>')
-		.addClass("circle");
-
-		if (this.getProgress() > 0.5) {
-			progress
-			.append($('<span/>', {class: "circle"}))
-			.append(circle);
-		} else {
-			progress
-			.append($('<span/>', {class: "progress_half"})
-				.append(circle)
-			);
-		}
-
-		achElem.prepend(progress);
+		this.element.prepend(this.lockDiv.addClass("unlocked"));
 	} else {
-		achElem.prepend($('<img/>', {src: this.getIconUrl()}));
+		this.lockDiv.remove();
 	}
-	return achElem;
+
+	if (this.getType() == "INCREMENTAL") {
+		this.imgDiv.remove();
+		this.element.prepend(this.infoDiv);
+		this.infoTextDiv.text(this.getProgress(100) + "%");
+		this.infoDispDiv.attr('class', this.getProgress(2) > 0 ? "circle" : "progress_half");
+		this.circleDiv.css({transform: "rotate(" + this.getProgress(360) + "deg)"});
+
+		if (this.getProgress(2) > 0) {
+			this.infoDiv.append(this.circleDiv);
+		} else {
+			this.infoDispDiv.append(this.circleDiv);
+		}
+	} else {
+		this.infoDiv.remove();
+		this.element.prepend(this.imgDiv.attr({src: this.getIconUrl()}));
+	}
 };
 Achievement.prototype.getProgress = function(a) {
 	a = typeof a !== "undefined" ? a : 1;
-	return d((this.currentSteps ? this.currentSteps : 0) * a, this.totalSteps);
+	return d((this.currentSteps ? 75 : 0) * a, this.totalSteps);
 };
 Achievement.prototype.getType = function() {
 	return this.getState() == "REVEALED" ? this.achievementType : "STANDARD";
@@ -71,37 +71,55 @@ Achievement.prototype.getState = function() {
 	return this.achievementState == "HIDDEN" ? "REVEALED" : this.achievementState;
 };
 Achievement.achievements = {};
+Achievement.getUnlockedCount = function() {
+	var unlocked = 0;
+	for (x in Achievement.achievements) {
+		unlocked += Achievement.achievements[x].getState() == "UNLOCKED" ? 1 : 0;
+	}
+	return unlocked;
+};
+Achievement.element = $('<div/>', {id: "achievements"})
+		.append($('<h1/>', {text: "Achievements"})
+			.append(Achievement.closeElement = $('<span/>'))
+		)
+		.append(Achievement.listElement = $('<div/>')
+			.append(Achievement.progressDiv = $('<h3/>')
+				.append($('<span/>')
+					.append(Achievement.barTextDiv = $('<b/>'))
+					.append(Achievement.barDiv = $('<span/>'))
+				)
+			)
+		);
 Achievement.update = function(obj) {
 	if (!Achievement.achievements[obj.id]) {
 		Achievement.achievements[obj.id] = new Achievement();
 	}
-	return Achievement.achievements[obj.id].collect(obj);
+	Achievement.achievements[obj.id].collect(obj);
 };
 Achievement.count = function() {
 	return Object.keys(Achievement.achievements).length;
 };
+Achievement.show = function() {
+	Achievement.progressDiv.text(Achievement.getUnlockedCount() + '/' + Achievement.count() + ' unlocked');
+	Achievement.barTextDiv.text(d(Achievement.getUnlockedCount() * 100, Achievement.count()) + '%');
+	Achievement.barDiv.css({width: d(Achievement.getUnlockedCount() * 90, Achievement.count())});
+
+	$(document.body).append(Achievement.element);
+	Achievement.closeElement.click(function() { Achievement.hide(); });
+
+	$('#ach_header span').click(function() {
+		Achievement.hide();
+	});
+};
+Achievement.hide = function() {
+	Achievement.element.remove();
+};
 Achievement.result = function(ach) {
-	show = (Achievement.count() > 0);
 	for (x in ach.items) {
 		Achievement.update(ach.items[x]);
 	}
 
-	if (show) {
-		$('#ach_list').empty();
-		unlocked = 0;
-		for (x in Achievement.achievements) {
-			$('#ach_list').append(Achievement.achievements[x].getElement());
-		}
-		
-		$('#ach_list').prepend(
-			$('<h1/>', {text: unlocked + '/' + Achievement.count() + ' unlocked'})
-			.append($('<span/>')
-				.append($('<b/>', {text: d(unlocked * 100, Achievement.count()) + '%'}))
-				.append($('<span/>', {width: d(unlocked * 90, Achievement.count())}))
-			)
-		);
-		$('#achievements').show();
-	}
+	Achievement.show();
 };
 
 // -------------------------------------------------------------------- //
@@ -180,7 +198,6 @@ var Match = function() {
 	)
 	.append(this.error.getElement())
 	.append(this.scrollDiv = $('<div/>', {class: "turns"})
-		.scroll($.proxy(this.scroll, this))
 		.append(this.turnDiv = $('<div/>'))
 	)
 	.append(this.alphaDiv)
@@ -235,7 +252,7 @@ Match.prototype.needsWord = function() {
 Match.prototype.update = function(obj) {
 	this.obj = obj;
 
-	$('#gamelist > div').append(
+	Match.listElement.append(
 		this.getListItem()
 		.click($.proxy(function() { this.show(); }, this))
 	);
@@ -337,6 +354,7 @@ Match.prototype.show = function() {
 	for (i in this.alpha) {
 		this.alpha[i].click({obj: this}, function(event) { $(this).toggleClass('hidden'); event.data.obj.updateAlpha(this.id.substr(6)); });
 	}
+	this.scrollDiv.scroll($.proxy(this.scroll, this));
 
 	setTimeout(function(obj) {
 		obj.gameWindow.css({top: "0%"});
@@ -385,11 +403,12 @@ Match.prototype.updateTurn = function(obj) {
 	}
 	this.turns[obj.turnid].update(obj);
 
-	if (obj.turnid == 0) {
-		this.turnDiv.css({marginTop: 0});
-	}
-
 	if (this.lastpivot === undefined || obj.turnid < this.lastpivot) {
+		if (obj.turnid == 0) {
+			this.turnDiv.css({marginTop: 0});
+		} else {
+			this.turnDiv.css({marginTop: "12px"});
+		}
 		this.lastpivot = obj.turnid;
 	}
 	if (this.pivot === undefined || obj.turnid > this.pivot) {
@@ -435,6 +454,7 @@ Match.prototype.revoke = function() {
 		return;
 	}
 };
+$('#leftpane').append($('<div/>', {class: "gamelist"}).append(Match.listElement = $('<div/>')));
 Match.TURNS_PER_REQUEST = 10;
 Match.matches = {};
 Match.transitioning = false;
@@ -458,16 +478,14 @@ Match.updateAll = function() {
 	}
 };
 Match.sort = function() {
-	var games = $('#gamelist > div');
-
-	games.children('div').sort(function(ao, bo) {
+	Match.listElement.children('div').sort(function(ao, bo) {
 		a = Match.matches[ao.id];
 		b = Match.matches[bo.id];
 
 		var r = (b.isTurn() ? 1 : 0) - (a.isTurn() ? 1 : 0);
 
 		return r != 0 ? r : (b.obj.updated - a.obj.updated) * (a.isTurn() ? -1 : 1);
-	}).detach().appendTo(games);
+	}).detach().appendTo(Match.listElement);
 };
 Match.result = function(res, err) {
 	if (err == 0) {
@@ -477,12 +495,23 @@ Match.result = function(res, err) {
 	} else {
 		Match.current.showError(Error.SERVER);
 	}
-	setTimeout(function() { $('#refresh').removeClass('spinner'); if (Match.current === undefined) { $('#gamelist .game').first().click(); } }, 200);
+	setTimeout(function() {
+		$('#refresh').removeClass('spinner');
+		if (Match.loadGame) {
+			Match.matches[Match.loadGame].getListItem().click();
+			delete Match.loadGame;
+		} else if (Match.current === undefined) {
+			$('.game').first().click();
+		}
+	}, 200);
+};
+Match.fail = function() {
+	$('#refresh').removeClass('spinner');
 };
 Match.loadGames = function() {
 	if (!$('#refresh').hasClass('spinner')) {
 		$('#refresh').addClass('spinner');
-		API.request(this, "getMatches", [], Match.result);
+		API.request(this, "getMatches", [], Match.result, Match.fail);
 	}
 };
 Match.revoke = function() {
@@ -631,7 +660,7 @@ API.baseURL = "https://thomasc.co.uk/wm/";
 API.identified = false;
 API.token = "";
 API.request = function(scope, endpoint, params, func, fail) {
-	if (!API.identified) { console.log("NOT IDENTIFIED"); return; };
+	if (!API.identified) { console.log("NOT IDENTIFIED"); fail.apply(scope); return; };
 
 	params.unshift(API.playerid);
 	API._request(scope, endpoint, params, func, fail);
@@ -661,7 +690,6 @@ API.result = function(res, err) {
 		API.playerid = res['key'];
 		API.identified = true;
 
-		$('#overlay').hide();
 		Match.loadGames();
 	} else {
 		console.log("Error Connecting to Game Server");
@@ -680,8 +708,86 @@ API.revoke = function(func) {
 
 // -------------------------------------------------------------------- //
 
+var Create = function() {
+	this.imgDiv = $('<img/>');
+	Create.playersDiv.append(this.element = $('<div/>', {class: "player"}));
+};
+Create.prototype.update = function(obj) {
+	this.obj = obj;
+	this.updateDOM();
+};
+Create.prototype.updateDOM = function(obj) {
+	this.element.text(this.obj.displayName);
+	this.element.append(this.imgDiv.attr({src: this.obj.image.url + "&sz=70"}));
+	this.element.click($.proxy(function() {
+		API.request(this, "createGame", [this.obj.id], Create.createResult);
+		Create.hide();
+	}, this));
+};
+Create.opponents = {};
+Create.PEOPLE_PER_REQUEST = 100;
+Create.element = $('<div/>', {class: "overlay"})
+	.append($('<div/>')
+		.append(Create.closeDiv = $('<img/>', {src: "image/navigation_cancel.png"}))
+		.append($('<h1/>', {text: "Create Game"}))
+		.append(Create.playersDiv = $('<div/>', {class: "players"}))
+	);
+Create.show = function() {
+	$(document.body).append(Create.element);
+	Create.playersDiv.scroll(Create.checkScroll);
+	Create.closeDiv.click(Create.hide);
+	Create.checkScroll();
+};
+Create.hide = function() {
+	Create.element.remove();
+};
+Create.checkScroll = function() {
+	lastElem = Create.playersDiv.children().last();
+	fromBottom = ($(lastElem).offset().top + $(lastElem).height()) - ($(Create.playersDiv).offset().top + $(Create.playersDiv).height());
+	if (fromBottom < 10 && Create.moreToken) {
+		Create.getMore();
+	}
+};
+Create.getMore = function() {
+	parm = {orderBy: "best", maxResults: Create.PEOPLE_PER_REQUEST};
+	if (Create.moreToken) {
+		parm.pageToken = Create.moreToken;
+		delete Create.moreToken;
+	}
+	gapi.client.request({path: "/plus/v1/people/me/people/visible", params: parm, callback: Create.result});
+};
+Create.result = function(obj) {
+	if (obj.nextPageToken) {
+		Create.moreToken = obj.nextPageToken;
+	}
+
+	var opponents = [];
+	for (x in Match.matches) {
+		opponents.push(Match.matches[x].getOpponent().getId());
+	}
+	for (x in obj.items) {
+		if (opponents.indexOf(obj.items[x].id) < 0) {
+			if (!(obj.items[x].id in Create.opponents)) {
+				Create.opponents[obj.items[x].id] = new Create();
+			}
+			Create.opponents[obj.items[x].id].update(obj.items[x]);
+		} else if (obj.items[x].id in Create.opponents) {
+			Create.opponents[obj.items[x].id].element.remove();
+		}
+	}
+	Create.show();
+};
+Create.createResult = function(r, e) {
+	if (e != 0) return;
+	Match.loadGame = r.gameid;
+	Match.loadGames();
+};
+
+// -------------------------------------------------------------------- //
+
 function signinCallback(authResult) {
 	if (authResult['access_token']) {
+		$('#signin').hide();
 		API.identify(authResult['access_token']);
 		gapi.client.request({path: "/plus/v1/people/me", callback: User.meresult});
 
@@ -695,15 +801,13 @@ function signinCallback(authResult) {
 				User.revoke();
 				Match.revoke();
 
-				$('#overlay').show();
+				$('#signin').show();
 				Match.current.hide();
 				delete Match.current;
-				$('#gamelist > div > div').remove();
+				Match.listElement.children('div').remove();
 			});
 		});
-		$('#ach_header').click(function() {
-			$('#achievements').hide();
-		});
+		$('#menu_new').click(Create.getMore);
 	}
 }
 
@@ -746,20 +850,15 @@ function d(a, b) {
 	return Math.floor(a / b);
 }
 
-$.fn.scrollTo = function( target, options, callback ){
-  if(typeof options == 'function' && arguments.length == 2){ callback = options; options = target; }
-  var settings = $.extend({
-    scrollTarget  : target,
-    offsetTop     : 0,
-    duration      : 0,
-    easing        : 'swing'
-  }, options);
-  return this.each(function(){
-    var scrollPane = $(this);
-    var scrollTarget = (typeof settings.scrollTarget == "number") ? settings.scrollTarget : $(settings.scrollTarget);
-    var scrollY = (typeof scrollTarget == "number") ? scrollTarget : scrollTarget.offset().top - scrollPane.offset().top + scrollPane.scrollTop() - parseInt(settings.offsetTop);
-    scrollPane.animate({scrollTop : scrollY }, parseInt(settings.duration), settings.easing, function(){
-      if (typeof callback == 'function') { callback.call(this); }
-    });
-  });
+$.fn.scrollTo = function(target, options) {
+	var settings = $.extend({
+		scrollTarget	: target,
+		offsetTop	: 0
+	}, options);
+	return this.each(function() {
+		var scrollPane = $(this);
+		var scrollTarget = (typeof settings.scrollTarget == "number") ? settings.scrollTarget : $(settings.scrollTarget);
+		var scrollY = (typeof scrollTarget == "number") ? scrollTarget : scrollTarget.offset().top - scrollPane.offset().top + scrollPane.scrollTop() - parseInt(settings.offsetTop);
+		scrollPane.scrollTop(scrollY);
+	});
 };
