@@ -6,3 +6,4 @@
  - Don't allow text to break line
 - [ ] Scroll turns to bottom when new ones arrive?
 - [ ] Add make turn button
+- [ ] Add needs word prompt
