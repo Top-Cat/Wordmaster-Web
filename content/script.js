@@ -47,7 +47,7 @@ Achievement.prototype.updateDOM = function() {
 };
 Achievement.prototype.getProgress = function(a) {
 	a = typeof a !== "undefined" ? a : 1;
-	return d((this.currentSteps ? 75 : 0) * a, this.totalSteps);
+	return d((this.currentSteps ? this.currentSteps : 0) * a, this.totalSteps);
 };
 Achievement.prototype.getType = function() {
 	return this.getState() == "REVEALED" ? this.achievementType : "STANDARD";
@@ -84,7 +84,7 @@ Achievement.element = $('<div/>', {id: "achievements"})
 		)
 		.append(Achievement.listElement = $('<div/>')
 			.append(Achievement.progressDiv = $('<h3/>')
-				.append($('<span/>')
+				.append(Achievement.progressBarDiv = $('<span/>')
 					.append(Achievement.barTextDiv = $('<b/>'))
 					.append(Achievement.barDiv = $('<span/>'))
 				)
@@ -100,7 +100,7 @@ Achievement.count = function() {
 	return Object.keys(Achievement.achievements).length;
 };
 Achievement.show = function() {
-	Achievement.progressDiv.text(Achievement.getUnlockedCount() + '/' + Achievement.count() + ' unlocked');
+	Achievement.progressDiv.text(Achievement.getUnlockedCount() + '/' + Achievement.count() + ' unlocked').append(Achievement.progressBarDiv);
 	Achievement.barTextDiv.text(d(Achievement.getUnlockedCount() * 100, Achievement.count()) + '%');
 	Achievement.barDiv.css({width: d(Achievement.getUnlockedCount() * 90, Achievement.count())});
 
