@@ -22,11 +22,7 @@ html, body {
 }
 body {
 	font-family: Russo;
-}
-#container {
-	position: relative;
-	overflow-y: hidden;
-	height: 100%;
+	overflow: hidden;
 }
 
 #header {
@@ -36,6 +32,8 @@ body {
 	font-family: Roboto;
 	font-size: 28px;
 	line-height: 48px;
+	position: relative;
+	z-index: 20;
 }
 #refresh, #menu, #refresh div {
 	width: 48px;
@@ -108,11 +106,13 @@ body {
 
 #leftpane, #rightpane {
 	height: 100%;
+	position: relative;
 }
 #leftpane {
 	width: 33%;
 	border-right: 2px solid #666;
 	float: left;
+	box-sizing: border-box;
 }
 #rightpane {
 	margin-left: 33%;
@@ -138,7 +138,6 @@ body {
 	left: 0px;
 	right: 0px;
 	bottom: 0px;
-	width: 33%;
 }
 .gamelist > div {
 	position: absolute;
@@ -152,6 +151,8 @@ body {
 	height: 50px;
 	cursor: pointer;
 	padding: 10px;
+	position: relative;
+	white-space: nowrap;
 }
 .game, .turn {
 	background: linear-gradient(to bottom,  rgba(230,230,230,0) 0%,rgba(196,196,196,0.98) 98%,rgba(102,102,102,1) 100%);
@@ -164,27 +165,48 @@ body {
 .game img {
 	margin-right: 10px;
 	vertical-align: middle;
+	width: 50px;
+}
+.game span {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	left: 70px;
+	right: 54px;
+	overflow: hidden;
+}
+.automatch span {
+	font-size: 0;
+}
+.game b, .turn b {
+	font-size: 16px;
+	font-weight: normal;
 }
 .time {
 	float: right;
 }
 .note {
-	float: right;
-	clear: both;
-	margin-top: 6px;
+	position: absolute;
+	right: 10px;
+	bottom: 10px;
 	background: url('../image/note.png');
 	width: 24px;
 	height: 24px;
 }
-
 .gameWindow {
 	-webkit-transition: top 0.6s;
 	position: absolute;
-	top: -100%;
 	height: 100%;
 	right: 0px;
-	left: 33%;
-	margin-left: 2px;
+	left: 0px;
+	margin-left: 33%;
+	top: -100%;
+}
+.gameWindow.main {
+	top: 0%;
+}
+.gameWindow.end {
+	top: 100%;
 }
 .scores {
 	color: #FFF;
@@ -197,12 +219,30 @@ body {
 	position: relative;
 	z-index: 20;
 }
-.gameWindow #footer {
+.needsword:before {
+	content: 'Choose a word to start the game';
+	text-align: center;
+	background-color: #222;
+	color: #FFF;
+	width: 100%;
+	height: 60px;
+	display: block;
+	position: absolute;
+	z-index: 30;
+	line-height: 60px;
+	font-size: 24px;
+}
+.footer {
 	position: absolute;
 	bottom: 0px;
 	height: 60px;
 	background-color: #B3B3B3;
 	width: 100%;
+}
+.footer img {
+	float: right;
+	padding: 9px;
+	cursor: pointer;
 }
 .turns {
 	position: absolute;
@@ -220,15 +260,27 @@ body {
 	cursor: default;
 	padding: 10px 0;
 	line-height: 24px;
+	white-space: nowrap;
+}
+.turn span {
+	display: block;
+	overflow: hidden;
+	direction: rtl;
+	text-align: left;
+}
+.turn_win span {
+	margin-right: 150px;
 }
 .pegs {
 	width: 96px;
 	height: 24px;
 	float: right;
 	margin-right: 10px;
+	margin-left: 10px;
 }
 .turn_player .pegs {
 	float: left;
+	margin-left: 0px;
 }
 .turn_win .pegs {
 	display: none !important;
@@ -239,7 +291,7 @@ body {
 	width: 60px;
 	float: left;
 }
-.turn_player .time {
+.turn_player .time, .turn_new .time {
 	width: auto;
 	float: right !important;
 }
@@ -298,7 +350,7 @@ body {
 }
 .alpha span {
 	cursor: pointer;
-	margin: 5px;
+	margin: 3px;
 	font-size: 32px;
 	display: inline-block;
 }
@@ -386,21 +438,23 @@ body {
 	border-bottom: 2px solid #4290AC;
 }
 #achievements > div {
-	width: 1212px;
+	max-width: 1212px;
 	margin: auto;
 	box-sizing: border-box;
 	padding: 10px 0;
+	text-align: center;
 }
 #achievements h3 {
 	padding: 0 20px;
 	font-family: RobotoI;
 	color: #000;
+	text-align: left;
 }
 #achievements h3 > span {
 	float: right;
 	width: 90px;
 	height: 22px;
-	margin: 6px 0;
+	margin-top: -4px;
 	background: rgba(0, 0, 0, 0.15);
 }
 #achievements h3 > span b {
@@ -418,6 +472,7 @@ body {
 	display: block;
 }
 .achievement {
+	text-align: left;
 	display: inline-block;
 	width: 172px;
 	height: 280px;
@@ -426,6 +481,7 @@ body {
 	background: #FFF url('../image/achbg.png') no-repeat;
 	box-shadow: 0 3px 3px -1px #AAA;
 	vertical-align: top;
+	position: relative;
 }
 .achievement h2 {
 	color: #000;
@@ -439,12 +495,18 @@ body {
 	height: 100px;
 	padding: 30px 36px 40px;
 }
+.achievement .text {
+	vertical-align: top;
+	display: inline-block;
+}
 .unlocked {
-	float: right;
 	width: 24px;
 	height: 36px;
 	background: url('../image/unlocked.png') no-repeat;
-	margin: 74px -4px 0 0;
+	position: absolute;
+	display: block;
+	right: 5px;
+	bottom: 5px;
 }
 .progress {
 	display: block;
@@ -525,10 +587,12 @@ body {
 
 	width: 500px;
 	background-color: #CCC;
+	min-width: 250px;
+	min-height: 250px;
 }
 .overlay h1 {
 	margin: 10px;
-	font-size: 32px;
+	font-size: 30px;
 	color: #444;
 }
 .overlay img {
@@ -549,6 +613,8 @@ body {
 	height: 70px;
 	line-height: 70px;
 	cursor: pointer;
+	overflow: hidden;
+	white-space: nowrap;
 }
 .player:active {
 	background-color: #222;
@@ -557,38 +623,165 @@ body {
 .player img {
 	float: left;
 	margin: 0 20px 0 0;
+	height: 70px;
 }
-/*
-#overlay > div > span {
-	display: block;
-	border-bottom: 2px solid #3090B3;
-	padding: 20px;
-	text-align: center;
-	color: #3090B3;
+@media (max-width: 600px) {
+	.alpha {
+		display: none;
+	}
+	.turns {
+		width: 100%;
+		border: 0;
+	}
 }
-#overlay > div {
-	border-radius: 2px;
-	position: fixed;
-	top: 50%;
-	left: 50%;
-	width: 500px;
-	margin-left: -250px;
-	margin-top: -150px;
-	background-color: #282828;
-	box-shadow: 0 5px 30px 0px #000;
-	color: #FFF;
+@media (max-width: 700px), (min-resolution: 120dpi) {
+	#achievements {
+		font-size: 10px;
+	}
+	#achievements > div {
+		padding: 10px 20px;
+	}
+	.achievement {
+		width: 100%;
+		height: 103px;
+		padding: 8px;
+		margin: 0 0 10px 0;
+		box-sizing: border-box;
+		background-image: url('../ximage/achbg.png');
+		font-size: 16px;
+
+		white-space: nowrap;
+		overflow: hidden;
+	}
+	.achievement > .text {
+		position: absolute;
+		left: 120px;
+		right: 28px;
+		top: 6px;
+	}
+	.achievement > .text span {
+		white-space: normal;
+	}
+	.achievement img {
+		padding: 8px 26px 8px 11px;
+		height: 72px;
+	}
+	.achievement h2 {
+		margin: 5px 0 3px;
+		font-size: 26px;
+	}
+	.progress {
+		width: 68px;
+		height: 68px;
+		margin: 8px 26px 8px 11px;
+		display: inline-block;
+	}
+	.progress .text {
+		width: 68px;
+		margin-top: 20px;
+		font-size: 20px;
+		margin-top: 23px;
+	}
+	.progress_half {
+		clip: rect(0px, 72px, 72px, 36px);
+	}
+	.progress .circle {
+		border: 9px solid #7A7A79;
+		clip: rect(0px, 33px, 68px, 0px);
+		border-radius: 33px;
+		width: 48px;
+		height: 48px;
+	}
+	.unlocked {
+		background-image: url('../ximage/unlocked.png');
+		width: 12px;
+		height: 18px;
+	}
 }
-.turns span {
+@media (max-width: 970px), (min-resolution: 120dpi) {
+	body {
+		min-width: 350px;
+	}
+	#menu ul {
+		right: 0;
+	}
+	#leftpane {
+		-webkit-transition: left 0.6s;
+		left: 0%;
+		width: 100%;
+		border: 0;
+	}
+	.gamelist, #signin {
+		margin-top: 50px;
+	}
+	#rightpane {
+		margin: 0;
+		padding: 0;
+		left: 100%;
+	}
+	.overlay {
+		font-size: 24px;
+	}
+	.overlay > div {
+		width: auto;
+		left: 50px;
+		transform: none;
+		right: 50px;
+	}
+	.player {
+		height: 50px;
+		line-height: 50px;
+	}
+	.player img {
+		height: 50px;
+	}
+	.showgame #leftpane {
+		left: -100%;
+	}
+	.showgame #rightpane {
+		left: 0%;
+	}
+	.gameWindow {
+		-webkit-transition: left 0.6s;
+		position: absolute;
+		height: 100%;
+		left: 100%;
+		width: 100%;
+		margin: 0;
+	}
+	.gameWindow.trans {
+		left: -100%;
+	}
+	.gameWindow.main {
+		left: 0%;
+	}
+	.gameWindow.end {
+		top: 0;
+		left: 100%;
+	}
+}
+@media (min-resolution: 120dpi) {
+	.achievement h2 {
+		font-size: 18px;
+	}
+	.achievement {
+		font-size: 14px;
+	}
+	.overlay > div {
+		left: 20px;
+		right: 20px;
+		bottom: 20px;
+		top: 20px;
+	}
+}
+@media (max-width: 400px) {
+	.game span {
+		font-size: 0;
+	}
+}
+#android-helper {
+	width: 0;
+	height: 0;
 	position: absolute;
-	height: 21px;
-	vertical-align: text-bottom;
-	display: inline-block;
-	left: 90px;
-	box-sizing: border-box;
-	right: 106px;
-	overflow: hidden;
-	white-space: nowrap;
-	direction: rtl;
-	text-align: left;
+	top: -10px;
 }
-*/

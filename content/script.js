@@ -1,7 +1,9 @@
 var Achievement = function() {
 	Achievement.listElement.append(this.element = $('<div/>', {class: "achievement"})
-		.append(this.nameDiv = $('<h2/>'))
-		.append(this.descDiv = $('<span/>'))
+		.append($('<span/>', {class: "text"})
+			.append(this.nameDiv = $('<h2/>'))
+			.append(this.descDiv = $('<span/>'))
+		)
 	);
 	this.infoDiv = $('<span/>', {class: "progress"})
 		.append(this.infoTextDiv = $('<span/>', {class: "text"}))
@@ -115,6 +117,11 @@ Achievement.hide = function() {
 	Achievement.element.remove();
 };
 Achievement.result = function(ach) {
+	if (ach.error) {
+		User.logout();
+		return;
+	}
+
 	for (x in ach.items) {
 		Achievement.update(ach.items[x]);
 	}
@@ -163,18 +170,21 @@ Error.prototype.hide = function() {
 		obj.trigger();
 	}, 600, this);
 };
-Error.NETWORK	= {name: "Network Unavailable", desc: "Please check your data connection"};
-Error.TURN	= {name: "It's not your turn!", desc: "Wait for your opponent to take their turn."};
-Error.WORD	= {name: "Not a word", desc: "That word is not in the Wordmaster dictionary."};
-Error.SERVER	= {name: "Server Error", desc: "Something went wrong. Try again later."};
+Error.global = new Error();
+Error.global.errorDiv.insertAfter('#header');
+Error.NETWORK		= {name: "Network Unavailable", desc: "Please check your data connection"};
+Error.TURN		= {name: "It's not your turn!", desc: "Wait for your opponent to take their turn."};
+Error.WORD		= {name: "Not a word", desc: "That word is not in the Wordmaster dictionary."};
+Error.SERVER		= {name: "Server Error", desc: "Something went wrong. Try again later."};
 Error.OPPONENT	= {name: "Game not ready", desc: "Opponent hasn't chosen their word yet."};
-Error.MATCH	= {name: "Match already exists", desc: "You're already playing against that person."};
-Error.WORDSET	= {name: "Word already set", desc: "You've already chosen your word for this game."};
+Error.MATCH		= {name: "Match already exists", desc: "You're already playing against that person."};
+Error.WORDSET		= {name: "Word already set", desc: "You've already chosen your word for this game."};
 Error.AUTOMATCH	= {name: "Auto match pending", desc: "You're already in the queue for matching."};
 
 // -------------------------------------------------------------------- //
 
 var Match = function() {
+	this.word = "";
 	this.turns = [];
 	this.error = new Error();
 
@@ -201,10 +211,11 @@ var Match = function() {
 		.append(this.turnDiv = $('<div/>'))
 	)
 	.append(this.alphaDiv)
-	.append($('<div/>', {id: "footer"})
+	.append(this.footerDiv = $('<div/>', {class: "footer"})
 		.append(this.turnCountDiv = $('<div/>', {class: "turn_count", text: "Turn"})
 			.append($('<span/>', {text: "2"}))
 		)
+		.append(this.guessButton = $('<img/>', {src: "image/guess_disabled.png"}))
 		.append($('<div/>', {class: "guess"})
 			.append(this.guessDiv = [$('<div/>'), $('<div/>'), $('<div/>'), $('<div/>')])
 		)
@@ -213,16 +224,32 @@ var Match = function() {
 	this.timeDiv = $('<div/>', {class: "time"});
 	this.noteDiv = $('<div/>', {class: "note"});
 	this.oppImg = $('<img/>');
-	this.textDiv = $('<span/>');
+	this.textDiv = $('<b/>');
 
 	this.listItem = $('<div/>', {class: "game"})
 	.append(this.oppImg)
-	.append(this.textDiv)
+	.append($('<span/>', {text: "vs "}).append(this.textDiv))
 	.append(this.timeDiv);
+};
+Match.prototype.keydown = function(e) {
+	c = e.keyCode;
+	if (c >= 65 && c <= 90 && this.word.length < 4) {
+		this.word += String.fromCharCode(c);
+	} else if (c == 8) {
+		this.word = this.word.substr(0, this.word.length - 1);
+	} else if (c == 13 && this.word.length == 4) {
+		this.playWord();
+	} else if (c == 27) {
+		this.hide();
+	} else {
+		return;
+	}
+	e.preventDefault();
+	this.updateDOM();
 };
 Match.prototype.scroll = function(event) {
 	if (this.scrollDiv.scrollTop() < 12 && this.lastpivot) {
-		this.request(this, "getTurns", [this.lastpivot, -Match.TURNS_PER_REQUEST], this.turnResult);
+		this.request(this, "getTurns", [this.lastpivot, -Match.TURNS_PER_REQUEST], this.scrollResult);
 	}
 };
 Match.prototype.timer = function() {
@@ -238,15 +265,23 @@ Match.prototype.getId = function() {
 	return this.obj.gameid;
 };
 Match.prototype.getOpponent = function() {
-	return User.get(this.obj.oppid);
+	if (this.obj.oppid !== undefined) {
+		return User.get(this.obj.oppid);
+	} else {
+		return User.autoMatch;
+	}
 };
 Match.prototype.getTimeSince = function() {
 	return timeSince(this.obj.updated);
 };
 Match.prototype.isTurn = function() {
-	return this.obj.turn || this.obj.needword;
+	return this.obj.turn || this.needsWord();
 };
-Match.prototype.needsWord = function() {
+Match.prototype.needsWord = function(o) {
+	if (typeof o == "boolean") {
+		this.obj.needword = o;
+		this.updateDOM();
+	}
 	return this.obj.needword;
 };
 Match.prototype.update = function(obj) {
@@ -279,7 +314,7 @@ Match.prototype.getMoreTurns = function(r, e) {
 			break;
 		case 6:
 			this.showError(Error.WORDSET);
-			this.obj.needword = false;
+			this.needsWord(false);
 			this.updateDOM();
 			break;
 		default:
@@ -292,7 +327,13 @@ Match.prototype.getMoreTurns = function(r, e) {
 Match.prototype.updateDOM = function() {
 	if (this.getOpponent().isLoaded()) {
 		this.oppImg.attr("src", this.getOpponent().getImage());
-		this.textDiv.text("vs " + this.getOpponent().getName(true));
+		this.textDiv.text(this.getOpponent().getName(true));
+
+		if (this.getOpponent().getId().length == 0) {
+			this.getListItem().addClass("automatch");
+		} else {
+			this.getListItem().removeClass("automatch");
+		}
 	}
 
 	this.meScoreDiv.text(this.obj.pscore);
@@ -309,6 +350,19 @@ Match.prototype.updateDOM = function() {
 
 	for (i = 0; i < 26; i++) {
 		this.alpha[i].attr("class", ((this.obj.alpha >> i) & 1) == 1 ? "hidden" : "");
+	}
+
+	if (this.needsWord() && this.word.length == 0) {
+		this.footerDiv.addClass("needsword");
+	} else {
+		this.footerDiv.removeClass("needsword");
+	}
+
+	this.guessButton.attr({src: "image/guess" + (this.word.length == 4 ? "" : "_disabled") + ".png"});
+
+	for (i = 0; i < 4; i++) {
+		this.guessDiv[i].text(this.word.substr(i, 1));
+		this.guessDiv[i].attr("class", i < this.word.length ? "char" : "");
 	}
 
 	if (User.me.isLoaded()) {
@@ -328,10 +382,15 @@ Match.prototype.hide = function() {
 	clearInterval(this.interval);
 
 	setTimeout(function(obj) {
-		obj.gameWindow.css({top: "100%"});
+		obj.gameWindow.removeClass("main").addClass("end");
+		if (Match.current == obj) {
+			delete Match.current;
+			$(document.body).removeClass("showgame");
+			$('#android-helper').blur();
+			document.location.hash = "";
+		}
 		setTimeout(function(obj) {
-			obj.gameWindow.remove();
-			obj.gameWindow.css({top: "-100%"});
+			obj.gameWindow.removeClass("end").removeClass("trans").remove();
 		}, 600, obj);
 	}, 10, this);
 };
@@ -339,9 +398,11 @@ Match.prototype.show = function() {
 	if (Match.transitioning || Match.current == this) {
 		return;
 	}
+	document.location.hash = this.getId();
 	Match.transitioning = true;
 
 	if (Match.current) {
+		this.gameWindow.addClass("trans");
 		Match.current.hide();
 	}
 	Match.old = Match.current;
@@ -349,22 +410,35 @@ Match.prototype.show = function() {
 	this.getListItem().addClass("selectedgame");
 	this.interval = setInterval($.proxy(this.timer, this), 5000);
 
-	$('#rightpane').append(this.gameWindow);
+	if (Scale.isSmall() && Scale.isAndroid()) {
+		//document.documentElement.webkitRequestFullScreen();
+	}
+	if (Scale.isAndroid()) {
+		$('#android-helper').click();
+	}
+
+	$(document.body).append(this.gameWindow);
 
 	for (i in this.alpha) {
 		this.alpha[i].click({obj: this}, function(event) { $(this).toggleClass('hidden'); event.data.obj.updateAlpha(this.id.substr(6)); });
 	}
 	this.scrollDiv.scroll($.proxy(this.scroll, this));
+	this.guessButton.click($.proxy(function() { this.playWord(); }, this));
 
 	setTimeout(function(obj) {
-		obj.gameWindow.css({top: "0%"});
-		if (obj.turns[obj.pivot]) {
-			obj.scrollDiv.scrollTo(obj.turns[obj.pivot].getElement());
-		}
+		$(document.body).addClass("showgame");
+		obj.gameWindow.addClass("main");
+		obj.scrollToBottom();
 		setTimeout(function() {
+			obj.scrollToBottom();
 			Match.transitioning = false;
 		}, 600);
 	}, 10, this);
+};
+Match.prototype.scrollToBottom = function() {
+	if (this.turns[this.pivot]) {
+		this.scrollDiv.scrollTo(this.turns[this.pivot].getElement());
+	}
 };
 Match.prototype.updateAlpha = function(off) {
 	this.obj.alpha ^= (1 << off);
@@ -386,6 +460,8 @@ Match.prototype.alphaFail = function(r, err) {
 	this.alphaDone(r, err);
 };
 Match.prototype.alphaDone = function(r, err) {
+	// Request done, remove status flag
+	this.alphaStatus &= ~1;
 	if (err != 0) {
 		this.alphaStatus |= 2;
 	}
@@ -393,9 +469,8 @@ Match.prototype.alphaDone = function(r, err) {
 	if ((this.alphaStatus & 2) == 2) {
 		this.alphaStatus |= 1;
 		this.request(this, "updateAlpha", [this.obj.alpha], this.alphaDone, this.alphaFail);
-	} else {
-		this.alphaStatus = 0;
 	}
+	this.alphaStatus &= ~2;
 };
 Match.prototype.updateTurn = function(obj) {
 	if (!(obj.turnid in this.turns)) {
@@ -416,7 +491,7 @@ Match.prototype.updateTurn = function(obj) {
 
 		// Update state
 		if (obj.guess.length > 0) {
-			this.obj.needword = obj.correct == 4;
+			this.needsWord(obj.correct == 4);
 		}
 		if (obj.turnnum > 0 && this.getOpponent().isLoaded()) {
 			this.obj.turn = obj.playerid == this.getOpponent().getId();
@@ -428,10 +503,18 @@ Match.prototype.updateTurn = function(obj) {
 			this.turnCountDiv.hide();
 		}
 		this.turnCountDiv.children().text(obj.turnnum);
+		this.scrollToBottom();
 
 		this.updateDOM();
 		Match.loadGames();
 	}
+};
+Match.prototype.scrollResult = function(res, err) {
+	topElement = this.turns[this.lastpivot];
+	for (x in res) {
+		this.updateTurn(res[x]);
+	}
+	this.scrollDiv.scrollTo(topElement.getElement());
 };
 Match.prototype.turnResult = function(res, err) {
 	for (x in res) {
@@ -441,8 +524,12 @@ Match.prototype.turnResult = function(res, err) {
 		this.getMoreTurns(0, 0);
 	}
 };
-Match.prototype.playWord = function(word) {
-	this.request(this, this.needsWord() ? "setWord" : "takeTurn", [word], this.getMoreTurns);
+Match.prototype.playWord = function() {
+	if (this.word.length == 4) {
+		this.request(this, this.needsWord() ? "setWord" : "takeTurn", [this.word], this.getMoreTurns);
+		this.word = "";
+		this.guessButton.attr({src: "image/guess_disabled.png"});
+	}
 };
 Match.prototype.request = function() {
 	arguments[2].unshift(this.getId());
@@ -460,6 +547,9 @@ Match.matches = {};
 Match.transitioning = false;
 Match.counter = 0;
 Match.interval = 30;
+if (window.location.hash.length > 0) {
+	Match.loadGame = window.location.hash.substr(1);
+}
 setInterval(function() {
 	if (Match.counter++ > Match.interval) {
 		Match.loadGames();
@@ -497,11 +587,13 @@ Match.result = function(res, err) {
 	}
 	setTimeout(function() {
 		$('#refresh').removeClass('spinner');
-		if (Match.loadGame) {
-			Match.matches[Match.loadGame].getListItem().click();
-			delete Match.loadGame;
-		} else if (Match.current === undefined) {
-			$('.game').first().click();
+		if (!Scale.isAndroid()) {
+			if (Match.loadGame) {
+				Match.matches[Match.loadGame].getListItem().click();
+				delete Match.loadGame;
+			} else if (Match.current === undefined && !Scale.isSmall()) {
+				$('.game').first().click();
+			}
 		}
 	}, 200);
 };
@@ -558,6 +650,7 @@ Turn.prototype.updateDOM = function() {
 	if (this.obj.turnnum == 0) {
 		this.turnDiv.addClass('turn_new');
 		this.textDiv.text("Your word is " + this.getGuess());
+		this.pegsDiv.remove();
 	} else {
 		this.pegsDiv.empty();
 		t = -2;
@@ -583,9 +676,8 @@ Turn.prototype.updateDOM = function() {
 		} else {
 			this.turnDiv.removeClass("turn_win");
 		}
-
-		this.timeDiv.text(this.getTimeSince());
 	}
+	this.timeDiv.text(this.getTimeSince());
 };
 Turn.prototype.getTimeSince = function() {
 	return timeSince(this.obj.when);
@@ -633,6 +725,7 @@ User.prototype.isLoaded = function() {
 };
 User.users = {};
 User.me = new User();
+User.autoMatch = new User().update({displayName: "Auto Match In Progress", name: {givenName: "Auto Match"}, id: "", image: {url: "image/games_matches_green.png"}});
 User.get = function(id) {
 	if (!User.users[id]) {
 		User.users[id] = new User();
@@ -641,16 +734,36 @@ User.get = function(id) {
 	return User.users[id];
 };
 User.result = function(usr) {
+	if (usr.error) {
+		User.logout();
+		return;
+	}
+
 	user = User.users[usr.id].update(usr);
 	Match.updateAll();
 };
 User.meresult = function(usr) {
+	if (usr.error) {
+		User.logout();
+		return;
+	}
+
 	user = new User();
 	User.me = User.users[usr.id] = user.update(usr);
 	Match.updateAll();
 };
-User.revoke = function() {
-	User.me = new User();	
+User.logout = function() {
+	API.revoke(function() {
+		User.me = new User();
+		Match.revoke();
+
+		$('#signin').show();
+		if (Match.current) {
+			Match.current.hide();
+			delete Match.current;
+		}
+		Match.listElement.children('div').remove();
+	});
 };
 
 // -------------------------------------------------------------------- //
@@ -682,7 +795,9 @@ API.internal = function(scope, url, func, fail) {
 		if (Match.current) {
 			Match.current.showError(Error.NETWORK);
 		}
-		fail.apply(scope);
+		if (typeof fail == "function") {
+			fail.apply(scope);
+		}
 	});
 };
 API.result = function(res, err) {
@@ -697,13 +812,17 @@ API.result = function(res, err) {
 	}
 };
 API.revoke = function(func) {
-	API.identified = false;
-	$.ajax({
-		url: "https://accounts.google.com/o/oauth2/revoke?token=" + API.token,
-		contentType: "application/json",
-		dataType: 'jsonp',
-		success: func
-	});
+	if (API.identified) {
+		API.identified = false;
+		$.ajax({
+			url: "https://accounts.google.com/o/oauth2/revoke?token=" + API.token,
+			contentType: "application/json",
+			dataType: 'jsonp',
+			success: func
+		});
+	} else {
+		func();
+	}
 };
 
 // -------------------------------------------------------------------- //
@@ -715,16 +834,17 @@ var Create = function() {
 Create.prototype.update = function(obj) {
 	this.obj = obj;
 	this.updateDOM();
+
+	return this;
 };
 Create.prototype.updateDOM = function(obj) {
 	this.element.text(this.obj.displayName);
-	this.element.append(this.imgDiv.attr({src: this.obj.image.url + "&sz=70"}));
+	this.element.prepend(this.imgDiv.attr({src: this.obj.image.url + "&sz=70"}));
 	this.element.click($.proxy(function() {
 		API.request(this, "createGame", [this.obj.id], Create.createResult);
 		Create.hide();
 	}, this));
 };
-Create.opponents = {};
 Create.PEOPLE_PER_REQUEST = 100;
 Create.element = $('<div/>', {class: "overlay"})
 	.append($('<div/>')
@@ -732,6 +852,7 @@ Create.element = $('<div/>', {class: "overlay"})
 		.append($('<h1/>', {text: "Create Game"}))
 		.append(Create.playersDiv = $('<div/>', {class: "players"}))
 	);
+Create.opponents = {"": new Create().update({id: "", displayName: "Auto Match", image: {url: "ximage/games_matches_green.png?"}})};
 Create.show = function() {
 	$(document.body).append(Create.element);
 	Create.playersDiv.scroll(Create.checkScroll);
@@ -742,10 +863,15 @@ Create.hide = function() {
 	Create.element.remove();
 };
 Create.checkScroll = function() {
-	lastElem = Create.playersDiv.children().last();
-	fromBottom = ($(lastElem).offset().top + $(lastElem).height()) - ($(Create.playersDiv).offset().top + $(Create.playersDiv).height());
-	if (fromBottom < 10 && Create.moreToken) {
-		Create.getMore();
+	if (Create.moreToken) {
+		fromBottom = 0;
+		if (Create.playersDiv.children().length > 0) {
+			lastElem = Create.playersDiv.children().last();
+			fromBottom = ($(lastElem).offset().top + $(lastElem).height()) - ($(Create.playersDiv).offset().top + $(Create.playersDiv).height());
+		}
+		if (fromBottom < 10) {
+			Create.getMore();
+		}
 	}
 };
 Create.getMore = function() {
@@ -757,6 +883,11 @@ Create.getMore = function() {
 	gapi.client.request({path: "/plus/v1/people/me/people/visible", params: parm, callback: Create.result});
 };
 Create.result = function(obj) {
+	if (obj.error) {
+		User.logout();
+		return;
+	}
+
 	if (obj.nextPageToken) {
 		Create.moreToken = obj.nextPageToken;
 	}
@@ -765,22 +896,47 @@ Create.result = function(obj) {
 	for (x in Match.matches) {
 		opponents.push(Match.matches[x].getOpponent().getId());
 	}
+	for (x in Create.opponents) {
+		if (opponents.indexOf(Create.opponents[x].obj.id) >= 0) {
+			Create.opponents[x].element.remove();
+		}
+	}
 	for (x in obj.items) {
 		if (opponents.indexOf(obj.items[x].id) < 0) {
 			if (!(obj.items[x].id in Create.opponents)) {
 				Create.opponents[obj.items[x].id] = new Create();
 			}
 			Create.opponents[obj.items[x].id].update(obj.items[x]);
-		} else if (obj.items[x].id in Create.opponents) {
-			Create.opponents[obj.items[x].id].element.remove();
 		}
 	}
 	Create.show();
 };
 Create.createResult = function(r, e) {
-	if (e != 0) return;
+	if (e != 0) {
+		if (e == 5) {
+			Error.global.show(Error.MATCH);
+		} else if (e == 9) {
+			Error.global.show(Error.AUTOMATCH);
+		} else {
+			Error.global.show(Error.SERVER);
+		}
+		return;
+	}
 	Match.loadGame = r.gameid;
 	Match.loadGames();
+};
+
+// -------------------------------------------------------------------- //
+
+var Scale = function() {};
+Scale.isSmall = function() {
+	return $('#leftpane').css('border-right-width') == "0px";
+};
+Scale.isAndroid = function() {
+	return navigator.userAgent.toLowerCase().indexOf("android") > -1;
+};
+Scale.keyboardClosed = function() {
+	return ($(window).height() / screen.height) > 0.7;
 };
 
 // -------------------------------------------------------------------- //
@@ -790,47 +946,42 @@ function signinCallback(authResult) {
 		$('#signin').hide();
 		API.identify(authResult['access_token']);
 		gapi.client.request({path: "/plus/v1/people/me", callback: User.meresult});
-
-		$('#refresh').click(function() { Match.loadGames(); });
-		$('#menu_ach').click(function() {
-			gapi.client.request({path: "/games/v1/players/me/achievements", callback: Achievement.result});
-			gapi.client.request({path: "/games/v1/achievements", callback: Achievement.result});
-		});
-		$('#menu_log').click(function() {
-			API.revoke(function() {
-				User.revoke();
-				Match.revoke();
-
-				$('#signin').show();
-				Match.current.hide();
-				delete Match.current;
-				Match.listElement.children('div').remove();
-			});
-		});
-		$('#menu_new').click(Create.getMore);
 	}
 }
 
-var word = "";
+window.onhashchange = function(event) {
+	if (window.location.hash.length > 0) {
+		match = Match.matches[window.location.hash.substr(1)];
+		if (match) {
+			match.show();
+		}
+	} else if (Match.current) {
+		Match.current.hide();
+	}
+}
 
 $(document).keydown(function(e) {
-	c = e.keyCode;
-	if (c >= 65 && c <= 90 && word.length < 4) {
-		word += String.fromCharCode(c);
-	} else if (c == 8) {
-		word = word.substr(0, word.length - 1);
-	} else if (c == 13) {
-		Match.current.playWord(word);
-		word = "";
-	} else {
-		return;
+	if (Match.current) {
+		Match.current.keydown(e);
 	}
-	e.preventDefault();
+});
 
-	for (i = 0; i < 4; i++) {
-		Match.current.guessDiv[i].text(word.substr(i, 1));
-		Match.current.guessDiv[i].attr("class", i < word.length ? "char" : "");
+$(window).resize(function(e) {
+	if (Scale.isAndroid() && Scale.keyboardClosed() && Match.current) {
+		Match.current.hide();
 	}
+});
+
+$(document).ready(function() {
+	$('#android-helper').click(function(e) { $(this).focus(); });
+
+	$('#refresh').click(Match.loadGames);
+	$('#menu_ach').click(function() {
+		gapi.client.request({path: "/games/v1/players/me/achievements", callback: Achievement.result});
+		gapi.client.request({path: "/games/v1/achievements", callback: Achievement.result});
+	});
+	$('#menu_log').click(User.logout);
+	$('#menu_new').click(Create.getMore);
 });
 
 function timeSince(time) {
