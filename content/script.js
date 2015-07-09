@@ -417,7 +417,7 @@ Match.prototype.show = function() {
 		$('#android-helper').click();
 	}
 
-	$(document.body).append(this.gameWindow);
+	$(Match.paneDiv).append(this.gameWindow);
 
 	for (i in this.alpha) {
 		this.alpha[i].click({obj: this}, function(event) { $(this).toggleClass('hidden'); event.data.obj.updateAlpha(this.id.substr(6)); });
@@ -547,6 +547,8 @@ Match.matches = {};
 Match.transitioning = false;
 Match.counter = 0;
 Match.interval = 30;
+Match.paneDiv = $('<div/>', {id: "rightpane"});
+$(document.body).append(Match.paneDiv);
 if (window.location.hash.length > 0) {
 	Match.loadGame = window.location.hash.substr(1);
 }
@@ -588,7 +590,7 @@ Match.result = function(res, err) {
 	setTimeout(function() {
 		$('#refresh').removeClass('spinner');
 		if (!Scale.isAndroid()) {
-			if (Match.loadGame) {
+			if (Match.loadGame && Match.matches[Match.loadGame]) {
 				Match.matches[Match.loadGame].getListItem().click();
 				delete Match.loadGame;
 			} else if (Match.current === undefined && !Scale.isSmall()) {
@@ -773,14 +775,14 @@ API.baseURL = "https://thomasc.co.uk/wm/";
 API.identified = false;
 API.token = "";
 API.request = function(scope, endpoint, params, func, fail) {
-	if (!API.identified) { console.log("NOT IDENTIFIED"); fail.apply(scope); return; };
+	if (!API.identified) { console.log("NOT IDENTIFIED"); if (typeof fail == "function") { fail.apply(scope); } return; };
 
 	params.unshift(API.playerid);
 	API._request(scope, endpoint, params, func, fail);
 };
 API.identify = function(token) {
-	API.token = token;
-	API._request(this, "identify", [token], API.result);
+	API.token = token['access_token'];
+	API._request(this, "identify", [API.token], API.result);
 };
 API._request = function(scope, endpoint, params, func, fail) {
 	url = API.baseURL + endpoint + "/" + params.join("/");
@@ -828,11 +830,13 @@ API.revoke = function(func) {
 // -------------------------------------------------------------------- //
 
 var Create = function() {
+	this.element = $('<div/>', {class: "player"});
 	this.imgDiv = $('<img/>');
-	Create.playersDiv.append(this.element = $('<div/>', {class: "player"}));
 };
 Create.prototype.update = function(obj) {
 	this.obj = obj;
+
+	Create.playersDiv.append(this.element);
 	this.updateDOM();
 
 	return this;
@@ -840,7 +844,7 @@ Create.prototype.update = function(obj) {
 Create.prototype.updateDOM = function(obj) {
 	this.element.text(this.obj.displayName);
 	this.element.prepend(this.imgDiv.attr({src: this.obj.image.url + "&sz=70"}));
-	this.element.click($.proxy(function() {
+	this.element.off('click').click($.proxy(function() {
 		API.request(this, "createGame", [this.obj.id], Create.createResult);
 		Create.hide();
 	}, this));
@@ -852,9 +856,21 @@ Create.element = $('<div/>', {class: "overlay"})
 		.append($('<h1/>', {text: "Create Game"}))
 		.append(Create.playersDiv = $('<div/>', {class: "players"}))
 	);
+Create.upgradeDiv = $('<div/>', {class: "upgrade"})
+	.append($('<div/>')
+		.append(Create.upgradeCloseDiv = $('<img/>', {src: "image/navigation_cancel.png"}))
+		.append($('<h1/>', {text: "Upgrade"}))
+		.append($('<div/>', {html: "To create more games you need to upgrade to the full version of Wordmaster.<br /><br />This one-off payment will allow you to create as many games as you like."})
+			.append(Create.payPalButton = $('<div/>', {class: "button", html: "Upgrade Now - &pound;0.99"}))
+			.append(Create.cancelButton = $('<div/>', {class: "button", text: "No Thanks"}))
+		)
+	);
 Create.opponents = {"": new Create().update({id: "", displayName: "Auto Match", image: {url: "ximage/games_matches_green.png?"}})};
 Create.show = function() {
 	$(document.body).append(Create.element);
+	for (x in Create.opponents) {
+		Create.opponents[x].updateDOM();
+	}
 	Create.playersDiv.scroll(Create.checkScroll);
 	Create.closeDiv.click(Create.hide);
 	Create.checkScroll();
@@ -879,6 +895,12 @@ Create.getMore = function() {
 	if (Create.moreToken) {
 		parm.pageToken = Create.moreToken;
 		delete Create.moreToken;
+	} else {
+		for (x in Create.opponents) {
+			if (x.length > 0) {
+				Create.opponents[x].element.remove();
+			}
+		}
 	}
 	gapi.client.request({path: "/plus/v1/people/me/people/visible", params: parm, callback: Create.result});
 };
@@ -893,14 +915,9 @@ Create.result = function(obj) {
 	}
 
 	var opponents = [];
-	for (x in Match.matches) {
-		opponents.push(Match.matches[x].getOpponent().getId());
-	}
-	for (x in Create.opponents) {
-		if (opponents.indexOf(Create.opponents[x].obj.id) >= 0) {
-			Create.opponents[x].element.remove();
-		}
-	}
+	Match.listElement.children().each(function() {
+		opponents.push(Match.matches[this.id].getOpponent().getId());
+	});
 	for (x in obj.items) {
 		if (opponents.indexOf(obj.items[x].id) < 0) {
 			if (!(obj.items[x].id in Create.opponents)) {
@@ -913,7 +930,16 @@ Create.result = function(obj) {
 };
 Create.createResult = function(r, e) {
 	if (e != 0) {
-		if (e == 5) {
+		if (e == 4) {
+			$(document.body).append(Create.upgradeDiv);
+			Create.upgradeCloseDiv.click(function() {
+				Create.upgradeDiv.remove();
+			});
+			Create.cancelButton.click(function() {
+				Create.upgradeDiv.remove();
+			});
+			Create.payPalButton.click(Create.paypal);
+		} else if (e == 5) {
 			Error.global.show(Error.MATCH);
 		} else if (e == 9) {
 			Error.global.show(Error.AUTOMATCH);
@@ -924,6 +950,18 @@ Create.createResult = function(r, e) {
 	}
 	Match.loadGame = r.gameid;
 	Match.loadGames();
+};
+Create.paypal = function() {
+	paypal.checkout.initXO();
+
+	API.request(this, "cartToken", [],
+		function(data) {
+			paypal.checkout.startFlow(data.token);
+		},
+		function() {
+			paypal.checkout.closeFlow();
+		}
+	);
 };
 
 // -------------------------------------------------------------------- //
@@ -942,18 +980,31 @@ Scale.keyboardClosed = function() {
 // -------------------------------------------------------------------- //
 
 function signinCallback(authResult) {
-	if (authResult['access_token']) {
+	if (authResult['code']) {
 		$('#signin').hide();
-		API.identify(authResult['access_token']);
+		API.identify(authResult);
 		gapi.client.request({path: "/plus/v1/people/me", callback: User.meresult});
 	}
 }
 
+function urlencode(v) {
+	return encodeURIComponent(encodeURIComponent(v));
+}
+
 window.onhashchange = function(event) {
 	if (window.location.hash.length > 0) {
-		match = Match.matches[window.location.hash.substr(1)];
-		if (match) {
-			match.show();
+		newHash = window.location.hash.substr(1);
+		if (newHash.substr(0, 14) == "paypal-success") {
+			API.request(this, "cartState", [urlencode(newHash.substr(15))], function(r) {
+				$('#PPFrame').remove();
+				Create.upgradeDiv.remove();
+				Create.show();
+			});
+		} else {
+			match = Match.matches[newHash];
+			if (match) {
+				match.show();
+			}
 		}
 	} else if (Match.current) {
 		Match.current.hide();
