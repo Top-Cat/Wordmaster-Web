@@ -7,4 +7,4 @@
 - [x] Scroll turns to bottom when new ones arrive?
 - [x] Add make turn button
 - [x] Add needs word prompt
-- [ ] Add purchase flow
+- [x] Add purchase flow

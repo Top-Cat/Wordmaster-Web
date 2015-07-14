@@ -253,7 +253,7 @@ Match.prototype.scroll = function(event) {
 	}
 };
 Match.prototype.timer = function() {
-	this.getMoreTurns(0, 0);
+	this.updateDOM();
 };
 Match.prototype.showError = function(obj) {
 	this.error.show(obj);
@@ -285,14 +285,19 @@ Match.prototype.needsWord = function(o) {
 	return this.obj.needword;
 };
 Match.prototype.update = function(obj) {
+	update = this.obj ? (this.obj.updated < obj.updated) : true;
 	this.obj = obj;
+
+	Match.updatePoint = Math.max(Match.updatePoint, this.obj.updated);
 
 	Match.listElement.append(
 		this.getListItem()
 		.click($.proxy(function() { this.show(); }, this))
 	);
 
-	this.getMoreTurns(0, 0);
+	if (update) {
+		this.getMoreTurns(0, 0);
+	}
 	this.updateDOM();
 
 	return this;
@@ -395,9 +400,11 @@ Match.prototype.hide = function() {
 	}, 10, this);
 };
 Match.prototype.show = function() {
-	if (Match.transitioning || Match.current == this) {
+	// Don't show if we're already changing match, this is the current match, or this match isn't visible to the user
+	if (Match.transitioning || Match.current == this || !$.contains(document, this.getListItem()[0])) {
 		return;
 	}
+	Create.hide();
 	document.location.hash = this.getId();
 	Match.transitioning = true;
 
@@ -408,11 +415,8 @@ Match.prototype.show = function() {
 	Match.old = Match.current;
 	Match.current = this;
 	this.getListItem().addClass("selectedgame");
-	this.interval = setInterval($.proxy(this.timer, this), 5000);
+	this.interval = setInterval($.proxy(this.timer, this), 1000);
 
-	if (Scale.isSmall() && Scale.isAndroid()) {
-		//document.documentElement.webkitRequestFullScreen();
-	}
 	if (Scale.isAndroid()) {
 		$('#android-helper').click();
 	}
@@ -506,7 +510,6 @@ Match.prototype.updateTurn = function(obj) {
 		this.scrollToBottom();
 
 		this.updateDOM();
-		Match.loadGames();
 	}
 };
 Match.prototype.scrollResult = function(res, err) {
@@ -526,7 +529,7 @@ Match.prototype.turnResult = function(res, err) {
 };
 Match.prototype.playWord = function() {
 	if (this.word.length == 4) {
-		this.request(this, this.needsWord() ? "setWord" : "takeTurn", [this.word], this.getMoreTurns);
+		this.request(this, this.needsWord() ? "setWord" : "takeTurn", [this.word]);
 		this.word = "";
 		this.guessButton.attr({src: "image/guess_disabled.png"});
 	}
@@ -541,23 +544,13 @@ Match.prototype.revoke = function() {
 		return;
 	}
 };
+Match.updatePoint = 0;
 $('#leftpane').append($('<div/>', {class: "gamelist"}).append(Match.listElement = $('<div/>')));
 Match.TURNS_PER_REQUEST = 10;
 Match.matches = {};
 Match.transitioning = false;
-Match.counter = 0;
-Match.interval = 30;
 Match.paneDiv = $('<div/>', {id: "rightpane"});
 $(document.body).append(Match.paneDiv);
-if (window.location.hash.length > 0) {
-	Match.loadGame = window.location.hash.substr(1);
-}
-setInterval(function() {
-	if (Match.counter++ > Match.interval) {
-		Match.loadGames();
-		Match.counter = 0;
-	}
-}, 1000);
 Match.update = function(obj) {
 	if (!Match.matches[obj.gameid]) {
 		Match.matches[obj.gameid] = new Match();
@@ -589,13 +582,10 @@ Match.result = function(res, err) {
 	}
 	setTimeout(function() {
 		$('#refresh').removeClass('spinner');
-		if (!Scale.isAndroid()) {
-			if (Match.loadGame && Match.matches[Match.loadGame]) {
-				Match.matches[Match.loadGame].getListItem().click();
-				delete Match.loadGame;
-			} else if (Match.current === undefined && !Scale.isSmall()) {
-				$('.game').first().click();
-			}
+		if (window.location.hash.length == 0 && !Scale.isAndroid() && Match.current === undefined && !Scale.isSmall()) {
+			$('.game').first().click();
+		} else {
+			window.onhashchange();
 		}
 	}, 200);
 };
@@ -607,6 +597,16 @@ Match.loadGames = function() {
 		$('#refresh').addClass('spinner');
 		API.request(this, "getMatches", [], Match.result, Match.fail);
 	}
+};
+Match.longPoll = function() {
+	API.request(this, "longPoll", [Match.updatePoint], function(r, e) {
+		if (e == 0) {
+			Match.result(r, 0);
+		}
+		Match.longPoll();
+	}, function() {
+		Match.longPoll();
+	});
 };
 Match.revoke = function() {
 	for (x in Match.matches) {
@@ -781,8 +781,8 @@ API.request = function(scope, endpoint, params, func, fail) {
 	API._request(scope, endpoint, params, func, fail);
 };
 API.identify = function(token) {
-	API.token = token['access_token'];
-	API._request(this, "identify", [API.token], API.result);
+	API.token = token;
+	API._request(this, "identify", [API.token.B.access_token], API.result);
 };
 API._request = function(scope, endpoint, params, func, fail) {
 	url = API.baseURL + endpoint + "/" + params.join("/");
@@ -808,6 +808,7 @@ API.result = function(res, err) {
 		API.identified = true;
 
 		Match.loadGames();
+		Match.longPoll();
 	} else {
 		console.log("Error Connecting to Game Server");
 		console.log(err);
@@ -816,12 +817,8 @@ API.result = function(res, err) {
 API.revoke = function(func) {
 	if (API.identified) {
 		API.identified = false;
-		$.ajax({
-			url: "https://accounts.google.com/o/oauth2/revoke?token=" + API.token,
-			contentType: "application/json",
-			dataType: 'jsonp',
-			success: func
-		});
+		API.token.disconnect();
+		func();
 	} else {
 		func();
 	}
@@ -849,34 +846,32 @@ Create.prototype.updateDOM = function(obj) {
 		Create.hide();
 	}, this));
 };
-Create.PEOPLE_PER_REQUEST = 100;
-Create.element = $('<div/>', {class: "overlay"})
-	.append($('<div/>')
-		.append(Create.closeDiv = $('<img/>', {src: "image/navigation_cancel.png"}))
-		.append($('<h1/>', {text: "Create Game"}))
-		.append(Create.playersDiv = $('<div/>', {class: "players"}))
-	);
-Create.upgradeDiv = $('<div/>', {class: "upgrade"})
-	.append($('<div/>')
-		.append(Create.upgradeCloseDiv = $('<img/>', {src: "image/navigation_cancel.png"}))
-		.append($('<h1/>', {text: "Upgrade"}))
-		.append($('<div/>', {html: "To create more games you need to upgrade to the full version of Wordmaster.<br /><br />This one-off payment will allow you to create as many games as you like."})
-			.append(Create.payPalButton = $('<div/>', {class: "button", html: "Upgrade Now - &pound;0.99"}))
-			.append(Create.cancelButton = $('<div/>', {class: "button", text: "No Thanks"}))
-		)
-	);
-Create.opponents = {"": new Create().update({id: "", displayName: "Auto Match", image: {url: "ximage/games_matches_green.png?"}})};
-Create.show = function() {
-	$(document.body).append(Create.element);
-	for (x in Create.opponents) {
-		Create.opponents[x].updateDOM();
+Create.show = function(obj) {
+	Create.hide();
+	if (obj) {
+		$(document.body).append(Create.upgradeDiv);
+		Create.upgradeCloseDiv.click(Create.hide);
+
+		Create.dialogText.html(obj.text);
+
+		Create.dialogButtonA.html(obj.buttonA.text);
+		Create.dialogButtonA.click(obj.buttonA.link);
+
+		Create.dialogButtonB.html(obj.buttonB.text);
+		Create.dialogButtonB.click(obj.buttonB.link);
+	} else {
+		$(document.body).append(Create.element);
+		for (x in Create.opponents) {
+			Create.opponents[x].updateDOM();
+		}
+		Create.playersDiv.scroll(Create.checkScroll);
+		Create.closeDiv.click(Create.hide);
+		Create.checkScroll();
 	}
-	Create.playersDiv.scroll(Create.checkScroll);
-	Create.closeDiv.click(Create.hide);
-	Create.checkScroll();
 };
 Create.hide = function() {
 	Create.element.remove();
+	Create.upgradeDiv.remove();
 };
 Create.checkScroll = function() {
 	if (Create.moreToken) {
@@ -931,14 +926,7 @@ Create.result = function(obj) {
 Create.createResult = function(r, e) {
 	if (e != 0) {
 		if (e == 4) {
-			$(document.body).append(Create.upgradeDiv);
-			Create.upgradeCloseDiv.click(function() {
-				Create.upgradeDiv.remove();
-			});
-			Create.cancelButton.click(function() {
-				Create.upgradeDiv.remove();
-			});
-			Create.payPalButton.click(Create.paypal);
+			Create.show(Create.UPGRADE);
 		} else if (e == 5) {
 			Error.global.show(Error.MATCH);
 		} else if (e == 9) {
@@ -948,8 +936,7 @@ Create.createResult = function(r, e) {
 		}
 		return;
 	}
-	Match.loadGame = r.gameid;
-	Match.loadGames();
+	document.location.hash = r.gameid;
 };
 Create.paypal = function() {
 	paypal.checkout.initXO();
@@ -963,6 +950,56 @@ Create.paypal = function() {
 		}
 	);
 };
+Create.completePaypal = function() {
+	q = parseQuery(newHash.substr(15));
+	API._request(this, "cartState", [q.token, q.PayerID], function(r) {
+		Create.hide();
+		Create.getMore();
+	}, function() {
+		Error.global.show(Error.SERVER);
+	});
+};
+Create.PEOPLE_PER_REQUEST = 100;
+Create.element = $('<div/>', {class: "overlay"})
+	.append($('<div/>')
+		.append(Create.closeDiv = $('<img/>', {src: "image/navigation_cancel.png"}))
+		.append($('<h1/>', {text: "Create Game"}))
+		.append(Create.playersDiv = $('<div/>', {class: "players"}))
+	);
+Create.upgradeDiv = $('<div/>', {class: "upgrade"})
+	.append($('<div/>')
+		.append(Create.upgradeCloseDiv = $('<img/>', {src: "image/navigation_cancel.png"}))
+		.append($('<h1/>', {text: "Upgrade"}))
+		.append($('<div/>')
+			.append(Create.dialogText = $('<span/>'))
+			.append(Create.dialogButtonA = $('<div/>', {class: "button"}))
+			.append(Create.dialogButtonB = $('<div/>', {class: "button"}))
+		)
+	);
+Create.UPGRADE = {
+	text: "To create more games you need to upgrade to the full version of Wordmaster.<br /><br />This one-off payment will allow you to create as many games as you like.",
+	buttonA: {
+		text: "<img src=\"https://www.paypalobjects.com/webstatic/en_US/i/buttons/pp-acceptance-small.png\" alt=\"Buy now with PayPal\" />Upgrade - &pound;0.99",
+		link: Create.paypal
+	},
+	buttonB: {
+		text: "No Thanks",
+		link: Create.hide
+	}
+};
+Create.CONFIRM = {
+	text: "You're nearly there!<br /><br />To pay &pound;0.99 and complete your upgrade click the button below.",
+	buttonA: {
+		text: "Complete Payment",
+		link: Create.completePaypal
+	},
+	buttonB: {
+		text: "Cancel",
+		link: Create.hide
+	}
+};
+Create.opponents = {"": new Create().update({id: "", displayName: "Auto Match", image: {url: "ximage/games_matches_green.png?"}})};
+
 
 // -------------------------------------------------------------------- //
 
@@ -980,27 +1017,36 @@ Scale.keyboardClosed = function() {
 // -------------------------------------------------------------------- //
 
 function signinCallback(authResult) {
-	if (authResult['code']) {
-		$('#signin').hide();
-		API.identify(authResult);
-		gapi.client.request({path: "/plus/v1/people/me", callback: User.meresult});
-	}
+	$('#signin').hide();
+	API.identify(authResult);
+	gapi.client.request({path: "/plus/v1/people/me", callback: User.meresult});
+}
+
+function onSignInFailure(a) {
+	console.log(a);
 }
 
 function urlencode(v) {
 	return encodeURIComponent(encodeURIComponent(v));
 }
 
+function parseQuery(qstr) {
+	var query = {};
+	var a = qstr.split('&');
+	for (var i = 0; i < a.length; i++) {
+		var b = a[i].split('=');
+		query[decodeURIComponent(b[0])] = decodeURIComponent(b[1]);
+	}
+	return query;
+}
+
 window.onhashchange = function(event) {
 	if (window.location.hash.length > 0) {
 		newHash = window.location.hash.substr(1);
 		if (newHash.substr(0, 14) == "paypal-success") {
-			API.request(this, "cartState", [urlencode(newHash.substr(15))], function(r) {
-				$('#PPFrame').remove();
-				Create.upgradeDiv.remove();
-				Create.show();
-			});
-		} else {
+			Create.show(Create.CONFIRM);
+			$('#PPFrame').remove();
+		} else if (!Scale.isAndroid()) {
 			match = Match.matches[newHash];
 			if (match) {
 				match.show();
@@ -1033,11 +1079,14 @@ $(document).ready(function() {
 	});
 	$('#menu_log').click(User.logout);
 	$('#menu_new').click(Create.getMore);
+	window.onhashchange();
 });
 
 function timeSince(time) {
-	diff = (new Date().getTime() / 1000) - time;
-	if (d(diff, 60) == 0) {
+	diff = (new Date().getTime() - time) / 1000;
+	if (diff < 0) {
+		return "~0s";
+	} else if (d(diff, 60) == 0) {
 		return d(diff, 1) + "s";
 	} else if (d(diff, 3600) == 0) {
 		return d(diff, 60) + "m";

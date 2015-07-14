@@ -622,6 +622,11 @@ body {
 	box-shadow: 0px 2px 2px 0px #000;
 	cursor: pointer;
 }
+.upgrade .button img {
+	float: left;
+	width: 40px;
+	margin-right: -45px;
+}
 .upgrade > div > div {
 	background-color: #FFF;
 	margin: 3px;

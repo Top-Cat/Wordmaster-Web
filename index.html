@@ -4,14 +4,13 @@
 		<title>Wordmaster</title>
 		<link rel="stylesheet" href="content/style.css" />
 		<meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=1' name='viewport' />
-		<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+		<meta name="google-signin-client_id" content="731445442831-io9re7uc8kp10o59apavsoo6hnpqvd2g.apps.googleusercontent.com">
 		<script src="https://apis.google.com/js/platform.js?onload=googleStart" async defer></script>
 		<script src="https://plus.google.com/js/client:platform.js" async defer></script>
 	</head>
 	<body>
 		<div id="leftpane">
 			<div id="header">
-				Wordmaster
 				<div id="menu">
 					<ul>
 						<li id="menu_new">Create Game</li>
@@ -20,10 +19,20 @@
 					</ul>
 				</div>
 				<div id="refresh"><div></div></div>
+				Wordmaster
 			</div>
-			<div id="signin"><div id="signinButton"><span class="g-signin" data-callback="signinCallback" data-clientid="731445442831-io9re7uc8kp10o59apavsoo6hnpqvd2g.apps.googleusercontent.com" data-cookiepolicy="single_host_origin" data-requestvisibleactions="http://schemas.google.com/AddActivity" data-width="wide" data-scope="https://www.googleapis.com/auth/games https://www.googleapis.com/auth/plus.login"></span></div><span>Sign in with google to begin playing with your friends.</span></div>
+			<div id="signin"><div id="signinButton"><span
+				class="g-signin2"
+				data-onsuccess="signinCallback"
+				data-onfailure="onSignInFailure"
+				data-cookiepolicy="single_host_origin"
+				data-requestvisibleactions="http://schemas.google.com/AddActivity"
+				data-width="wide"
+				data-scope="https://www.googleapis.com/auth/games https://www.googleapis.com/auth/plus.login">
+				</span></div><span>Sign in with google to begin playing with your friends.</span></div>
 		</div>
 		<input type="text" id="android-helper" autocomplete="off" />
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
 		<script src="content/script.js"></script>
 		<script src="//www.paypalobjects.com/api/checkout.js" async></script>
 	</body>
