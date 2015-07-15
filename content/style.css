@@ -62,10 +62,10 @@ body {
 	z-index: 100;
 	margin-top: 48px;
 }
-#menu:hover ul {
+#menu.signedin:hover ul {
 	display: block;
 }
-#menu ul:hover {
+#menu.signedin ul:hover {
 	display: block;
 }
 #menu li {

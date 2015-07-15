@@ -599,14 +599,16 @@ Match.loadGames = function() {
 	}
 };
 Match.longPoll = function() {
-	API.request(this, "longPoll", [Match.updatePoint], function(r, e) {
-		if (e == 0) {
-			Match.result(r, 0);
-		}
-		Match.longPoll();
-	}, function() {
-		Match.longPoll();
-	});
+	if (API.identified) {
+		API.request(this, "longPoll", [Match.updatePoint], function(r, e) {
+			if (e == 0) {
+				Match.result(r, 0);
+			}
+			Match.longPoll();
+		}, function() {
+			Match.longPoll();
+		});
+	}
 };
 Match.revoke = function() {
 	for (x in Match.matches) {
@@ -759,6 +761,7 @@ User.logout = function() {
 		User.me = new User();
 		Match.revoke();
 
+		$('#menu').removeClass("signedin");
 		$('#signin').show();
 		if (Match.current) {
 			Match.current.hide();
@@ -1017,6 +1020,7 @@ Scale.keyboardClosed = function() {
 // -------------------------------------------------------------------- //
 
 function signinCallback(authResult) {
+	$('#menu').addClass("signedin");
 	$('#signin').hide();
 	API.identify(authResult);
 	gapi.client.request({path: "/plus/v1/people/me", callback: User.meresult});
