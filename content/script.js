@@ -272,7 +272,7 @@ Match.prototype.getOpponent = function() {
 	}
 };
 Match.prototype.getTimeSince = function() {
-	return timeSince(this.obj.updated);
+	return timeSince(this.obj.updated_user);
 };
 Match.prototype.isTurn = function() {
 	return this.obj.turn || this.needsWord();
@@ -285,7 +285,11 @@ Match.prototype.needsWord = function(o) {
 	return this.obj.needword;
 };
 Match.prototype.update = function(obj) {
+	if (this.alphaStatus > 0) {
+		obj.alpha = this.obj.alpha;
+	}
 	update = this.obj ? (this.obj.updated < obj.updated) : true;
+
 	this.obj = obj;
 
 	Match.updatePoint = Math.max(Match.updatePoint, this.obj.updated);
@@ -296,13 +300,13 @@ Match.prototype.update = function(obj) {
 	);
 
 	if (update) {
-		this.getMoreTurns(0, 0);
+		this.getMoreTurns();
 	}
 	this.updateDOM();
 
 	return this;
 };
-Match.prototype.getMoreTurns = function(r, e) {
+Match.prototype.takeTurnResult = function(r, e) {
 	switch (e) {
 		case 0:
 			break;
@@ -326,7 +330,8 @@ Match.prototype.getMoreTurns = function(r, e) {
 			this.showError(Error.SERVER);
 			break;
 	}
-
+};
+Match.prototype.getMoreTurns = function() {
 	this.request(this, "getTurns", this.pivot ? [this.pivot, Match.TURNS_PER_REQUEST] : [], this.turnResult);
 };
 Match.prototype.updateDOM = function() {
@@ -506,7 +511,7 @@ Match.prototype.updateTurn = function(obj) {
 		} else {
 			this.turnCountDiv.hide();
 		}
-		this.turnCountDiv.children().text(obj.turnnum);
+		this.turnCountDiv.children().text(d(obj.turnnum, 2) + 1);
 		this.scrollToBottom();
 
 		this.updateDOM();
@@ -524,12 +529,12 @@ Match.prototype.turnResult = function(res, err) {
 		this.updateTurn(res[x]);
 	}
 	if (res.length == Match.TURNS_PER_REQUEST) {
-		this.getMoreTurns(0, 0);
+		this.getMoreTurns();
 	}
 };
 Match.prototype.playWord = function() {
 	if (this.word.length == 4) {
-		this.request(this, this.needsWord() ? "setWord" : "takeTurn", [this.word]);
+		this.request(this, this.needsWord() ? "setWord" : "takeTurn", [this.word], this.takeTurnResult);
 		this.word = "";
 		this.guessButton.attr({src: "image/guess_disabled.png"});
 	}
@@ -550,6 +555,7 @@ Match.TURNS_PER_REQUEST = 10;
 Match.matches = {};
 Match.transitioning = false;
 Match.paneDiv = $('<div/>', {id: "rightpane"});
+Match.longPollRunning = false;
 $(document.body).append(Match.paneDiv);
 Match.update = function(obj) {
 	if (!Match.matches[obj.gameid]) {
@@ -600,6 +606,7 @@ Match.loadGames = function() {
 };
 Match.longPoll = function() {
 	if (API.identified) {
+		Match.longPollRunning = true;
 		API.request(this, "longPoll", [Match.updatePoint], function(r, e) {
 			if (e == 0) {
 				Match.result(r, 0);
@@ -608,6 +615,8 @@ Match.longPoll = function() {
 		}, function() {
 			Match.longPoll();
 		});
+	} else {
+		Match.longPollRunning = false;
 	}
 };
 Match.revoke = function() {
@@ -811,7 +820,9 @@ API.result = function(res, err) {
 		API.identified = true;
 
 		Match.loadGames();
-		Match.longPoll();
+		if (!Match.longPollRunning) {
+			Match.longPoll();
+		}
 	} else {
 		console.log("Error Connecting to Game Server");
 		console.log(err);
