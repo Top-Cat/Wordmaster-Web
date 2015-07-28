@@ -186,6 +186,7 @@ Error.AUTOMATCH	= {name: "Auto match pending", desc: "You're already in the queu
 var Match = function() {
 	this.word = "";
 	this.turns = [];
+	this.scrollLoading = false;
 	this.error = new Error();
 
 	var keyboard = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
@@ -248,8 +249,11 @@ Match.prototype.keydown = function(e) {
 	this.updateDOM();
 };
 Match.prototype.scroll = function(event) {
-	if (this.scrollDiv.scrollTop() < 12 && this.lastpivot) {
-		this.request(this, "getTurns", [this.lastpivot, -Match.TURNS_PER_REQUEST], this.scrollResult);
+	if (this.scrollDiv.scrollTop() < 12 && this.lastpivot && !this.scrollLoading) {
+		this.scrollLoading = true;
+		this.request(this, "getTurns", [this.lastpivot, -Match.TURNS_PER_REQUEST], this.scrollResult, function() {
+			this.scrollLoading = false;
+		});
 	}
 };
 Match.prototype.timer = function() {
@@ -294,10 +298,16 @@ Match.prototype.update = function(obj) {
 
 	Match.updatePoint = Math.max(Match.updatePoint, this.obj.updated);
 
-	Match.listElement.append(
-		this.getListItem()
-		.click($.proxy(function() { this.show(); }, this))
-	);
+	if (this.obj.visible) {
+		Match.listElement.append(
+			this.getListItem()
+			.off()
+			.click($.proxy(this.show, this))
+			.on('contextmenu', $.proxy(function(e) { Context.show(this, e); }, this))
+		);
+	} else {
+		this.getListItem().remove();
+	}
 
 	if (update) {
 		this.getMoreTurns();
@@ -459,6 +469,9 @@ Match.prototype.updateAlpha = function(off) {
 		this.alphaStatus |= 2;
 	}
 };
+Match.prototype.setVisible = function(visible) {
+	this.request(this, "setGameVisible", [visible ? 1 : 0]);
+};
 Match.prototype.sortTurns = function() {
 	this.turnDiv.children('div').sort(function(ao, bo) {
 		return ao.id - bo.id;
@@ -518,6 +531,7 @@ Match.prototype.updateTurn = function(obj) {
 	}
 };
 Match.prototype.scrollResult = function(res, err) {
+	this.scrollLoading = false;
 	topElement = this.turns[this.lastpivot];
 	for (x in res) {
 		this.updateTurn(res[x]);
@@ -553,6 +567,7 @@ Match.updatePoint = 0;
 $('#leftpane').append($('<div/>', {class: "gamelist"}).append(Match.listElement = $('<div/>')));
 Match.TURNS_PER_REQUEST = 10;
 Match.matches = {};
+Match.userMatches = {};
 Match.transitioning = false;
 Match.paneDiv = $('<div/>', {id: "rightpane"});
 Match.longPollRunning = false;
@@ -561,6 +576,7 @@ Match.update = function(obj) {
 	if (!Match.matches[obj.gameid]) {
 		Match.matches[obj.gameid] = new Match();
 	}
+	Match.userMatches[obj.gameid] = 1;
 	return Match.matches[obj.gameid].update(obj);
 };
 Match.updateAll = function() {
@@ -575,7 +591,7 @@ Match.sort = function() {
 
 		var r = (b.isTurn() ? 1 : 0) - (a.isTurn() ? 1 : 0);
 
-		return r != 0 ? r : (b.obj.updated - a.obj.updated) * (a.isTurn() ? -1 : 1);
+		return r != 0 ? r : (b.obj.updated_user - a.obj.updated_user) * (a.isTurn() ? -1 : 1);
 	}).detach().appendTo(Match.listElement);
 };
 Match.result = function(res, err) {
@@ -610,6 +626,7 @@ Match.longPoll = function() {
 		API.request(this, "longPoll", [Match.updatePoint], function(r, e) {
 			if (e == 0) {
 				Match.result(r, 0);
+				Match.updateAll();
 			}
 			Match.longPoll();
 		}, function() {
@@ -620,9 +637,11 @@ Match.longPoll = function() {
 	}
 };
 Match.revoke = function() {
+	Match.userMatches = {};
 	for (x in Match.matches) {
 		Match.matches[x].revoke();
 	}
+	Match.listElement.children('div').remove();
 };
 
 // -------------------------------------------------------------------- //
@@ -718,9 +737,15 @@ Turn.prototype.getDisplaced = function() {
 
 var User = function() {
 	this.loaded = false;
+	this.obj = {};
 };
 User.prototype.update = function(obj) {
-	this.obj = obj;
+	for (p in obj) {
+		if (obj.hasOwnProperty(p)) {
+			this.obj[p] = obj[p];
+		}
+	}
+
 	this.loaded = true;
 	return this;
 };
@@ -738,7 +763,7 @@ User.prototype.isLoaded = function() {
 };
 User.users = {};
 User.me = new User();
-User.autoMatch = new User().update({displayName: "Auto Match In Progress", name: {givenName: "Auto Match"}, id: "", image: {url: "image/games_matches_green.png"}});
+User.autoMatch = new User().update({displayName: "Auto Match In Progress", name: {givenName: "Auto Match"}, id: "", image: {url: "image/games_matches_green.png?"}});
 User.get = function(id) {
 	if (!User.users[id]) {
 		User.users[id] = new User();
@@ -746,13 +771,19 @@ User.get = function(id) {
 	}
 	return User.users[id];
 };
+User.put = function(obj) {
+	if (!User.users[obj.id]) {
+		User.users[obj.id] = new User();
+	}
+	return User.users[obj.id].update(obj);
+};
 User.result = function(usr) {
 	if (usr.error) {
 		User.logout();
 		return;
 	}
 
-	user = User.users[usr.id].update(usr);
+	user = User.put(usr);
 	Match.updateAll();
 };
 User.meresult = function(usr) {
@@ -761,8 +792,7 @@ User.meresult = function(usr) {
 		return;
 	}
 
-	user = new User();
-	User.me = User.users[usr.id] = user.update(usr);
+	User.me = User.put(usr);
 	Match.updateAll();
 };
 User.logout = function() {
@@ -776,14 +806,13 @@ User.logout = function() {
 			Match.current.hide();
 			delete Match.current;
 		}
-		Match.listElement.children('div').remove();
 	});
 };
 
 // -------------------------------------------------------------------- //
 
 var API = function() {};
-API.baseURL = "https://thomasc.co.uk/wm/";
+API.baseURL = "https://wordmaster.cc/";
 API.identified = false;
 API.token = "";
 API.request = function(scope, endpoint, params, func, fail) {
@@ -844,19 +873,24 @@ var Create = function() {
 	this.element = $('<div/>', {class: "player"});
 	this.imgDiv = $('<img/>');
 };
-Create.prototype.update = function(obj) {
-	this.obj = obj;
+Create.prototype.update = function(usr, match) {
+	this.usr = usr;
+	this.match = match;
 
 	Create.playersDiv.append(this.element);
 	this.updateDOM();
 
 	return this;
 };
-Create.prototype.updateDOM = function(obj) {
-	this.element.text(this.obj.displayName);
-	this.element.prepend(this.imgDiv.attr({src: this.obj.image.url + "&sz=70"}));
+Create.prototype.updateDOM = function() {
+	this.element.text(this.usr.getName(this.usr.getId().length > 0)); // Use short name for auto match
+	this.element.prepend(this.imgDiv.attr({src: this.usr.getImage() + "&sz=70"}));
 	this.element.off('click').click($.proxy(function() {
-		API.request(this, "createGame", [this.obj.id], Create.createResult);
+		if (this.match) {
+			this.match.setVisible(true);
+		} else {
+			API.request(this, "createGame", [this.usr.getId()], Create.createResult);
+		}
 		Create.hide();
 	}, this));
 };
@@ -905,13 +939,29 @@ Create.getMore = function() {
 		parm.pageToken = Create.moreToken;
 		delete Create.moreToken;
 	} else {
-		for (x in Create.opponents) {
-			if (x.length > 0) {
-				Create.opponents[x].element.remove();
-			}
-		}
+		Create.clear();
+		Create.opponents[""] = Create.autoMatchOpponent;
+		Create.playersDiv.append(Create.opponents[""].element);
 	}
 	gapi.client.request({path: "/plus/v1/people/me/people/visible", params: parm, callback: Create.result});
+};
+Create.clear = function() {
+	for (x in Create.opponents) {
+		Create.opponents[x].element.remove();
+	}
+};
+Create.unHide = function() {
+	Create.clear();
+	for (x in Match.matches) {
+		if (!Match.matches[x].obj.visible) {
+			opp = Match.matches[x].getOpponent();
+			if (!(opp.getId() in Create.opponents)) {
+				Create.opponents[opp.getId()] = new Create();
+			}
+			Create.opponents[opp.getId()].update(opp, Match.matches[x]);
+		}
+	}
+	Create.show();
 };
 Create.result = function(obj) {
 	if (obj.error) {
@@ -924,15 +974,15 @@ Create.result = function(obj) {
 	}
 
 	var opponents = [];
-	Match.listElement.children().each(function() {
-		opponents.push(Match.matches[this.id].getOpponent().getId());
-	});
+	for (x in Match.userMatches) {
+		opponents.push(Match.matches[x].getOpponent().getId());
+	}
 	for (x in obj.items) {
 		if (opponents.indexOf(obj.items[x].id) < 0) {
 			if (!(obj.items[x].id in Create.opponents)) {
 				Create.opponents[obj.items[x].id] = new Create();
 			}
-			Create.opponents[obj.items[x].id].update(obj.items[x]);
+			Create.opponents[obj.items[x].id].update(User.put(obj.items[x]));
 		}
 	}
 	Create.show();
@@ -1012,7 +1062,8 @@ Create.CONFIRM = {
 		link: Create.hide
 	}
 };
-Create.opponents = {"": new Create().update({id: "", displayName: "Auto Match", image: {url: "ximage/games_matches_green.png?"}})};
+Create.autoMatchOpponent = new Create().update(User.autoMatch);
+Create.opponents = {};
 
 
 // -------------------------------------------------------------------- //
@@ -1026,6 +1077,22 @@ Scale.isAndroid = function() {
 };
 Scale.keyboardClosed = function() {
 	return ($(window).height() / screen.height) > 0.7;
+};
+
+// -------------------------------------------------------------------- //
+
+var Context = function() {};
+$(document.body).append(Context.element = $('<ul/>', {id: 'context-menu'})
+			.append(Context.hideDiv = $('<li/>', {text: "Hide Game"}))
+);
+Context.show = function(match, e) {
+	Context.element.show().css({left: e.pageX, top: e.pageY});
+	Context.hideDiv.off().click($.proxy(function() { this.setVisible(false); }, match));
+	e.stopPropagation();
+	e.preventDefault();
+};
+Context.hide = function() {
+	Context.element.hide();
 };
 
 // -------------------------------------------------------------------- //
@@ -1054,6 +1121,14 @@ function parseQuery(qstr) {
 	}
 	return query;
 }
+
+$(document).bind("contextmenu", function(e) {
+	Context.hide();
+	e.preventDefault();
+});
+$(document).click(function(e) {
+	Context.hide();
+});
 
 window.onhashchange = function(event) {
 	if (window.location.hash.length > 0) {
@@ -1094,6 +1169,7 @@ $(document).ready(function() {
 	});
 	$('#menu_log').click(User.logout);
 	$('#menu_new').click(Create.getMore);
+	$('#menu_unh').click(Create.unHide);
 	window.onhashchange();
 });
 
